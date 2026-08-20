@@ -146,6 +146,7 @@ def get_meta_info_for_pmc_article(article_elem) -> PmcMeta:
             this_completeness = sum(x is not None for x in [pub_year, pub_month, pub_day])
             if this_completeness > completeness:
                 most_complete = pub_year, pub_month, pub_day
+                completeness = this_completeness
         pub_year, pub_month, pub_day = most_complete
 
     journal = (
@@ -228,7 +229,7 @@ def process_pmc_file(source: Union[str, TextIO]) -> Iterable[PmcArticle]:
                         sub_meta["pub_year"] = meta["pub_year"]
                         sub_meta["pub_month"] = meta["pub_month"]
                         sub_meta["pub_day"] = meta["pub_day"]
-                    if sub_meta["journal"] is None:
+                    if not sub_meta["journal"]:
                         sub_meta["journal"] = meta["journal"]
                         sub_meta["journal_iso"] = meta["journal_iso"]
 
