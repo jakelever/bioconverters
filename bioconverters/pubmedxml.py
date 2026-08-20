@@ -21,6 +21,9 @@ from .utils import (
 
 _DateTuple = Tuple[Optional[int], Optional[int], Optional[int]]
 
+_MONTH_NAME_TO_NUMBER = {m: i for i, m in enumerate(calendar.month_name)}
+_MONTH_NAME_TO_NUMBER.update({m: i for i, m in enumerate(calendar.month_abbr)})
+
 
 class PubMedArticle(TypedDict):
     pmid: str
@@ -50,18 +53,8 @@ def _get_journal_date_for_medline_file(elem: etree.Element, pmid: Union[str, int
     """
     year_regex = re.compile(r"(18|19|20)\d\d")
 
-    month_mapping = {}
-    for i, m in enumerate(calendar.month_name):
-        month_mapping[m] = i
-    for i, m in enumerate(calendar.month_abbr):
-        month_mapping[m] = i
-
     # Try to extract the publication date
     pub_date_field = elem.find("./MedlineCitation/Article/Journal/JournalIssue/PubDate")
-    medline_date_field = elem.find(
-        "./MedlineCitation/Article/Journal/JournalIssue/PubDate/MedlineDate"
-    )
-
     assert pub_date_field is not None, "Couldn't find PubDate field for PMID=%s" % pmid
 
     medline_date_field = pub_date_field.find("./MedlineDate")
@@ -74,11 +67,7 @@ def _get_journal_date_for_medline_file(elem: etree.Element, pmid: Union[str, int
         regex_search = re.search(year_regex, medline_date_field.text)
         if regex_search:
             pub_year = regex_search.group()
-        month_search = [
-            c
-            for c in (list(calendar.month_name) + list(calendar.month_abbr))
-            if c != "" and c in medline_date_field.text
-        ]
+        month_search = [c for c in _MONTH_NAME_TO_NUMBER if c and c in medline_date_field.text]
         if len(month_search) > 0:
             pub_month = month_search[0]
     else:
@@ -95,8 +84,8 @@ def _get_journal_date_for_medline_file(elem: etree.Element, pmid: Union[str, int
             pub_year = None
 
     if pub_month is not None:
-        if pub_month in month_mapping:
-            pub_month = month_mapping[pub_month]  # type: ignore
+        if pub_month in _MONTH_NAME_TO_NUMBER:
+            pub_month = _MONTH_NAME_TO_NUMBER[pub_month]  # type: ignore
         pub_month = int(pub_month)
     if pub_day is not None:
         pub_day = int(pub_day)
@@ -104,16 +93,11 @@ def _get_journal_date_for_medline_file(elem: etree.Element, pmid: Union[str, int
     return pub_year, pub_month, pub_day
 
 
-def _get_pubmed_entry_date(elem: etree.Element, pmid) -> _DateTuple:
-    """
-    Args:
-        pmid: not used?
-    """
+def _get_pubmed_entry_date(elem: etree.Element) -> _DateTuple:
     pub_date_fields = elem.findall("./PubmedData/History/PubMedPubDate")
     all_dates = {}
     for pub_date_field in pub_date_fields:
         assert "PubStatus" in pub_date_field.attrib
-        # if 'PubStatus' in pub_date_field.attrib and pub_date_field.attrib['PubStatus'] == "pubmed":
         pub_date_field_year = pub_date_field.find("./Year")
         pub_date_field_month = pub_date_field.find("./Month")
         pub_date_field_day = pub_date_field.find("./Day")
@@ -151,6 +135,12 @@ _pub_type_skips = {
 _doi_regex = re.compile(r"^[0-9\.]+\/.+[^\/]$")
 
 
+def _format_mesh_field(prefix: str, mesh_id: str, major_topic_yn: str, name: str) -> str:
+    for value in (mesh_id, major_topic_yn, name):
+        assert "|" not in value and "~" not in value, "Found delimiter in %s" % value
+    return "%s|%s|%s|%s" % (prefix, mesh_id, major_topic_yn, name)
+
+
 def parse_pubmedxml(
     source: Union[str, TextIO],
 ) -> Iterable[PubMedArticle]:
@@ -166,7 +156,7 @@ def parse_pubmedxml(
             pmid = pmid_field.text
 
             journal_year, journal_month, journal_day = _get_journal_date_for_medline_file(elem, pmid)
-            entry_year, entry_month, entry_day = _get_pubmed_entry_date(elem, pmid)
+            entry_year, entry_month, entry_day = _get_pubmed_entry_date(elem)
 
             j_comparison = tuple(
                 9999 if d is None else d for d in [journal_year, journal_month, journal_day]
@@ -212,7 +202,6 @@ def parse_pubmedxml(
             for chemical_elem in chemical_elems:
                 chem_id = chemical_elem.attrib["UI"]
                 name = chemical_elem.text
-                # chemicals.append((chem_id,name))
                 chemicals.append("%s|%s" % (chem_id, name))
             chemicals_txt = "\t".join(chemicals)
 
@@ -220,33 +209,21 @@ def parse_pubmedxml(
             mesh_elems = elem.findall("./MedlineCitation/MeshHeadingList/MeshHeading")
             for mesh_elem in mesh_elems:
                 descriptor_elem = mesh_elem.find("./DescriptorName")
-                mesh_id = descriptor_elem.attrib["UI"]
-                major_topic_yn = descriptor_elem.attrib["MajorTopicYN"]
-                name = descriptor_elem.text
-
-                assert "|" not in mesh_id and "~" not in mesh_id, "Found delimiter in %s" % mesh_id
-                assert "|" not in major_topic_yn and "~" not in major_topic_yn, (
-                    "Found delimiter in %s" % major_topic_yn
+                mesh_heading = _format_mesh_field(
+                    "Descriptor",
+                    descriptor_elem.attrib["UI"],
+                    descriptor_elem.attrib["MajorTopicYN"],
+                    descriptor_elem.text,
                 )
-                assert "|" not in name and "~" not in name, "Found delimiter in %s" % name
-
-                mesh_heading = "Descriptor|%s|%s|%s" % (mesh_id, major_topic_yn, name)
 
                 qualifier_elems = mesh_elem.findall("./QualifierName")
                 for qualifier_elem in qualifier_elems:
-                    mesh_id = qualifier_elem.attrib["UI"]
-                    major_topic_yn = qualifier_elem.attrib["MajorTopicYN"]
-                    name = qualifier_elem.text
-
-                    assert "|" not in mesh_id and "~" not in mesh_id, (
-                        "Found delimiter in %s" % mesh_id
+                    mesh_heading += "~" + _format_mesh_field(
+                        "Qualifier",
+                        qualifier_elem.attrib["UI"],
+                        qualifier_elem.attrib["MajorTopicYN"],
+                        qualifier_elem.text,
                     )
-                    assert "|" not in major_topic_yn and "~" not in major_topic_yn, (
-                        "Found delimiter in %s" % major_topic_yn
-                    )
-                    assert "|" not in name and "~" not in name, "Found delimiter in %s" % name
-
-                    mesh_heading += "~Qualifier|%s|%s|%s" % (mesh_id, major_topic_yn, name)
 
                 mesh_headings.append(mesh_heading)
             mesh_headings_txt = "\t".join(mesh_headings)
@@ -257,7 +234,6 @@ def parse_pubmedxml(
                 concept_id = concept_elem.attrib["UI"]
                 concept_type = concept_elem.attrib["Type"]
                 concept_name = concept_elem.text
-                # supplementary_concepts.append((concept_id,concept_type,concept_name))
                 supplementary_concepts.append("%s|%s|%s" % (concept_id, concept_type, concept_name))
             supplementary_concepts_txt = "\t".join(supplementary_concepts)
 
@@ -273,7 +249,7 @@ def parse_pubmedxml(
                 doi = dois[0]  # We'll just use DOI the first one provided
 
             pmc_elems = elem.findall("./PubmedData/ArticleIdList/ArticleId[@IdType='pmc']")
-            assert len(pmc_elems) <= 1, "Foud more than one PMCID with PMID: %s" % pmid
+            assert len(pmc_elems) <= 1, "Found more than one PMCID with PMID: %s" % pmid
             pmcid = None
             if len(pmc_elems) == 1:
                 pmcid = pmc_elems[0].text
@@ -324,24 +300,25 @@ def parse_pubmedxml(
             if journal_title_iso_fields:
                 journal_iso_title = journal_title_iso_fields[0].text
 
-            document = {}
-            document["pmid"] = pmid
-            document["pmcid"] = pmcid
-            document["doi"] = doi
-            document["pub_year"] = pub_year
-            document["pub_month"] = pub_month
-            document["pub_day"] = pub_day
-            document["title"] = title_text
-            document["abstract"] = abstract_text
-            document["journal"] = journal_title
-            document["journal_iso"] = journal_iso_title
-            document["authors"] = authors
-            document["chemicals"] = chemicals_txt
-            document["mesh_headings"] = mesh_headings_txt
-            document["supplementary_mesh"] = supplementary_concepts_txt
-            document["publication_types"] = pub_type_txt
-
-            yield PubMedArticle(document)
+            yield PubMedArticle(
+                {
+                    "pmid": pmid,
+                    "pmcid": pmcid,
+                    "doi": doi,
+                    "pub_year": pub_year,
+                    "pub_month": pub_month,
+                    "pub_day": pub_day,
+                    "title": title_text,
+                    "abstract": abstract_text,
+                    "journal": journal_title,
+                    "journal_iso": journal_iso_title,
+                    "authors": authors,
+                    "chemicals": chemicals_txt,
+                    "mesh_headings": mesh_headings_txt,
+                    "supplementary_mesh": supplementary_concepts_txt,
+                    "publication_types": pub_type_txt,
+                }
+            )
 
             # Important: clear the current element from memory to keep memory usage low
             elem.clear()
