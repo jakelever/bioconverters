@@ -57,59 +57,19 @@ def _collapse_whitespace(text: str) -> str:
     return re.sub(r"\s+", " ", text).strip()
 
 
-def _trim_buggy_sentences(tree: etree.Element) -> etree.Element:
+def _trim_buggy_sentences(text) -> etree.Element:
     """
-    Trim overly long "sentences" (period-delimited segments) to a maximum length, to avoid
-    issues with buggy, unbroken runs of text in some PMC articles. The check runs against the
-    tree's full flattened text (a "sentence" may span several elements, e.g. either side of a
-    kept <sup> tag) - if trimming is needed, the tree's text/tail fragments are then truncated
-    in place, in document order, to match.
+    
     """
     MAXLENGTH = 90000
 
-    flat_text = "".join(tree.itertext())
-    trimmed_text = ".".join(segment[:MAXLENGTH] for segment in flat_text.split("."))
+    trimmed_text = ".".join(segment[:MAXLENGTH] + '.' + ' '*len(segment-MAXLENGTH-1) for segment in text.split("."))
+    assert len(trimmed_text) == len(text)
 
-    if len(trimmed_text) == len(flat_text):
-        return tree
-
-    remaining = [len(trimmed_text)]
-
-    def _truncate(s):
-        if s is None:
-            return None
-        if remaining[0] <= 0:
-            return ""
-        if len(s) <= remaining[0]:
-            remaining[0] -= len(s)
-            return s
-        s = s[: remaining[0]]
-        remaining[0] = 0
-        return s
-
-    def _walk(elem):
-        elem.text = _truncate(elem.text)
-        for child in elem:
-            _walk(child)
-            child.tail = _truncate(child.tail)
-
-    _walk(tree)
-    return tree
+    return trimmed_text
 
 
-def _tree_to_xml_string(tree: etree.Element) -> str:
-    """
-    Serialize the inner XML content of a tree (no outer wrapper element), e.g.
-    "some <sup>1</sup>H text". With no children (keep_tags=set()), this is just the
-    tree's plain text, unchanged.
-    """
-    inner = tree.text or ""
-    for child in tree:
-        inner += etree.tostring(child, encoding="unicode")
-    return inner
-
-
-def _extract_passages(elements, ignore_tags, split_tags, keep_tags):
+def _extract_passages(elements, ignore_tags, split_tags, keep_tags, return_xml):
     """
     Flatten a list of XML elements into cleaned-up XML strings, one per passage. Each
     string is the passage's plain text with any keep_tags spans preserved as inline
@@ -129,11 +89,15 @@ def _extract_passages(elements, ignore_tags, split_tags, keep_tags):
         text, spans = tree_to_spans(elem)
         text = _cleanup_pmc_text(text)
         for passage in spans_to_passages(text, spans, ignore_tags, split_tags, keep_tags):
+            passage["text"] = _trim_buggy_sentences(passage["text"])
+            
             tree = spans_to_tree(passage["text"], passage["spans"])
-            tree = _trim_buggy_sentences(tree)
-            xml_string = _tree_to_xml_string(tree)
+            xml_string = etree.tostring(tree, encoding="unicode")
             xml_string = _collapse_whitespace(xml_string)
-            if xml_string:
+
+            if return_xml:
                 results.append(xml_string)
+            else:
+                results.append(_strip_markup(xml_string))
 
     return results
