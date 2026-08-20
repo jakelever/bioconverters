@@ -2,7 +2,7 @@ import calendar
 import html
 import re
 import xml.etree.cElementTree as etree
-from typing import Dict, Iterable, Optional, TextIO, Tuple, Union
+from typing import Iterable, Optional, TextIO, Tuple, Union
 
 try:
     # python 3.8+
@@ -12,9 +12,9 @@ except ImportError:
 
 import bioc
 
+from .pubmed_tags import PUBMED_IGNORE_TAGS, PUBMED_KEEP_TAGS, PUBMED_SPLIT_TAGS
 from .utils import (
-    TagHandlerFunction,
-    extract_text_chunks,
+    extract_passages,
     remove_brackets_without_words,
     remove_brackets_from_titles,
     trim_sentence_lengths,
@@ -153,7 +153,7 @@ doi_regex = re.compile(r"^[0-9\.]+\/.+[^\/]$")
 
 
 def process_medline_file(
-    source: Union[str, TextIO], tag_handlers: Dict[str, TagHandlerFunction] = {}
+    source: Union[str, TextIO],
 ) -> Iterable[MedlineArticle]:
     """
     Args:
@@ -287,11 +287,13 @@ def process_medline_file(
 
             # Extract the title of paper
             title = elem.findall("./MedlineCitation/Article/ArticleTitle")
-            title_text = extract_text_chunks(title, tag_handlers=tag_handlers)
+            title_passages = extract_passages(
+                title, PUBMED_IGNORE_TAGS, PUBMED_SPLIT_TAGS, PUBMED_KEEP_TAGS
+            )
             title_text = [
-                remove_brackets_from_titles(chunk.text)
-                for chunk in title_text
-                if chunk.text
+                remove_brackets_from_titles(passage["text"])
+                for passage in title_passages
+                if passage["text"]
             ]
             title_text = [t for t in title_text if len(t) > 0]
             title_text = [html.unescape(t) for t in title_text]
@@ -299,8 +301,10 @@ def process_medline_file(
 
             # Extract the abstract from the paper
             abstract = elem.findall("./MedlineCitation/Article/Abstract/AbstractText")
-            abstract_text = extract_text_chunks(abstract, tag_handlers=tag_handlers)
-            abstract_text = [chunk.text for chunk in abstract_text if len(chunk.text) > 0]
+            abstract_passages = extract_passages(
+                abstract, PUBMED_IGNORE_TAGS, PUBMED_SPLIT_TAGS, PUBMED_KEEP_TAGS
+            )
+            abstract_text = [passage["text"] for passage in abstract_passages if len(passage["text"]) > 0]
             abstract_text = [html.unescape(t) for t in abstract_text]
             abstract_text = [remove_brackets_without_words(t) for t in abstract_text]
 
@@ -342,14 +346,13 @@ def process_medline_file(
 
 def pubmedxml2bioc(
     source: Union[str, TextIO],
-    tag_handlers: Dict[str, TagHandlerFunction] = {},
     trim_sentences=True,
 ) -> Iterable[bioc.BioCDocument]:
     """
     Args:
         source: path to the MEDLINE xml file
     """
-    for pm_doc in process_medline_file(source, tag_handlers=tag_handlers):
+    for pm_doc in process_medline_file(source):
         bioc_doc = bioc.BioCDocument()
         bioc_doc.id = pm_doc["pmid"]
         bioc_doc.infons["title"] = " ".join(pm_doc["title"])

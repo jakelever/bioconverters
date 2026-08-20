@@ -3,7 +3,7 @@ import html
 import io
 import re
 import xml.etree.cElementTree as etree
-from typing import Dict, Iterable, Iterator, Optional, TextIO, Tuple, Union
+from typing import Iterable, Iterator, Optional, TextIO, Tuple, Union
 
 try:
     # python 3.8+
@@ -15,14 +15,8 @@ from collections import OrderedDict
 
 import bioc
 
-from .utils import (
-    TagHandlerFunction,
-    TextChunk,
-    extract_text_chunks,
-    remove_brackets_from_titles,
-    strip_annotation_markers,
-    trim_sentence_lengths,
-)
+from .pmc_tags import PMC_IGNORE_TAGS, PMC_KEEP_TAGS, PMC_SPLIT_TAGS
+from .utils import extract_passages, remove_brackets_from_titles, trim_sentence_lengths
 
 allowed_subsections = {
     "abbreviations",
@@ -72,12 +66,12 @@ allowed_subsections = {
 
 
 class TextSource(TypedDict):
-    title: Iterable[TextChunk]
-    subtitle: Iterable[TextChunk]
-    abstract: Iterable[TextChunk]
-    article: Iterable[TextChunk]
-    back: Iterable[TextChunk]
-    floating: Iterable[TextChunk]
+    title: Iterable[dict]
+    subtitle: Iterable[dict]
+    abstract: Iterable[dict]
+    article: Iterable[dict]
+    back: Iterable[dict]
+    floating: Iterable[dict]
 
 
 class PmcArticle(TypedDict):
@@ -90,57 +84,44 @@ class PmcArticle(TypedDict):
     journal: str
     journalISO: str
     textSources: TextSource
-    annotations: Dict[str, str] = {}
 
 
-def extract_article_content(
-    article_elem: etree.Element, tag_handlers: Dict[str, TagHandlerFunction]
-) -> Tuple[TextSource, Dict[str, str]]:
+def extract_article_content(article_elem: etree.Element) -> TextSource:
     """
     Given the XML element representing the top-level of the scientific article, extract all the text sources
-
-    Args:
-        tag_handlers: custom callables to handle various XML tags
     """
-    annotations_map: Dict[str, TextChunk] = {}
     # Extract the title of paper
     title = article_elem.findall(
         "./front/article-meta/title-group/article-title"
     ) + article_elem.findall("./front-stub/title-group/article-title")
     assert len(title) <= 1
-    title_text = extract_text_chunks(title, tag_handlers=tag_handlers)
-    title_text = [
-        TextChunk(remove_brackets_from_titles(t.text), t.xml_node) for t in title_text
-    ]
+    title_text = extract_passages(title, PMC_IGNORE_TAGS, PMC_SPLIT_TAGS, PMC_KEEP_TAGS)
+    for passage in title_text:
+        passage["text"] = remove_brackets_from_titles(passage["text"])
 
     # Get the subtitle (if it's there)
     subtitle = article_elem.findall(
         "./front/article-meta/title-group/subtitle"
     ) + article_elem.findall("./front-stub/title-group/subtitle")
-    subtitle_text = extract_text_chunks(subtitle, tag_handlers=tag_handlers)
-    subtitle_text = [
-        TextChunk(remove_brackets_from_titles(t.text), t.xml_node) for t in subtitle_text
-    ]
+    subtitle_text = extract_passages(subtitle, PMC_IGNORE_TAGS, PMC_SPLIT_TAGS, PMC_KEEP_TAGS)
+    for passage in subtitle_text:
+        passage["text"] = remove_brackets_from_titles(passage["text"])
 
     # Extract the abstract from the paper
     abstract = article_elem.findall("./front/article-meta/abstract") + article_elem.findall(
         "./front-stub/abstract"
     )
-    abstract_text = extract_text_chunks(
-        abstract, tag_handlers=tag_handlers, annotations_map=annotations_map
-    )
+    abstract_text = extract_passages(abstract, PMC_IGNORE_TAGS, PMC_SPLIT_TAGS, PMC_KEEP_TAGS)
 
     # Extract the full text from the paper as well as supplementaries and floating blocks of text
-    article_text = extract_text_chunks(
-        article_elem.findall("./body"), tag_handlers=tag_handlers, annotations_map=annotations_map
+    article_text = extract_passages(
+        article_elem.findall("./body"), PMC_IGNORE_TAGS, PMC_SPLIT_TAGS, PMC_KEEP_TAGS
     )
-    back_text = extract_text_chunks(
-        article_elem.findall("./back"), tag_handlers=tag_handlers, annotations_map=annotations_map
+    back_text = extract_passages(
+        article_elem.findall("./back"), PMC_IGNORE_TAGS, PMC_SPLIT_TAGS, PMC_KEEP_TAGS
     )
-    floating_text = extract_text_chunks(
-        article_elem.findall("./floats-group"),
-        tag_handlers=tag_handlers,
-        annotations_map=annotations_map,
+    floating_text = extract_passages(
+        article_elem.findall("./floats-group"), PMC_IGNORE_TAGS, PMC_SPLIT_TAGS, PMC_KEEP_TAGS
     )
     text_sources = OrderedDict()  # make sure the sections stay in the order specified below
     text_sources["title"] = title_text
@@ -153,12 +134,12 @@ def extract_article_content(
     for k in text_sources.keys():
         cleaned = []
         for passage in text_sources[k]:
-            if len(passage.text):
-                passage.text = html.unescape(passage.text)
+            if len(passage["text"]):
+                passage["text"] = html.unescape(passage["text"])
                 cleaned.append(passage)
         text_sources[k] = cleaned
 
-    return text_sources, annotations_map
+    return text_sources
 
 
 def get_meta_info_for_pmc_article(
@@ -224,7 +205,8 @@ def get_meta_info_for_pmc_article(
         + article_elem.findall("./front-stub/journal-title-group/journal-title")
     )
     assert len(journal) <= 1
-    journal_text = " ".join([c.text for c in extract_text_chunks(journal)])
+    journal_passages = extract_passages(journal, PMC_IGNORE_TAGS, PMC_SPLIT_TAGS, PMC_KEEP_TAGS)
+    journal_text = " ".join([p["text"] for p in journal_passages])
 
     journal_iso_text = ""
     journal_iso = article_elem.findall("./front/journal-meta/journal-id") + article_elem.findall(
@@ -269,7 +251,6 @@ def apply_pmc_xlink_fix(
 
 def process_pmc_file(
     source: Union[str, TextIO],
-    tag_handlers: Dict[str, TagHandlerFunction] = {},
 ) -> Iterable[PmcArticle]:
 
     source = apply_pmc_xlink_fix(source)
@@ -341,9 +322,7 @@ def process_pmc_file(
                         sub_journal = journal
                         sub_journal_iso = journal_iso
 
-                text_sources, annotations = extract_article_content(
-                    article_elem, tag_handlers=tag_handlers
-                )
+                text_sources = extract_article_content(article_elem)
 
                 document = PmcArticle(
                     {
@@ -356,7 +335,6 @@ def process_pmc_file(
                         "journal": sub_journal,
                         "journalISO": sub_journal_iso,
                         "textSources": text_sources,
-                        'annotations': annotations,
                     }
                 )
 
@@ -368,20 +346,14 @@ def process_pmc_file(
 
 def pmcxml2bioc(
     source: Union[str, TextIO],
-    tag_handlers: Dict[str, TagHandlerFunction] = {},
     trim_sentences: bool = False,
-    all_xml_path_infon: bool = False,
-    mark_citations: bool = False,
 ) -> Iterator[Iterable[bioc.BioCDocument]]:
     """
     Convert a PMC XML file into its Bioc equivalent
 
     Args:
         source: The text or file handle containing the PMC XML
-        tag_handlers: custom overrides for handling specific XML tags.
         trim_sentences: Trim text content to a maximum sentence length.
-        all_xml_path_infon: Add a xml_path infon element to every passages to describe where in the XML heirarchy this text is from (Will always add to table/figure elements even without flag)
-        mark_citations: Add 0-length bioc annotations for in-text citations
 
     Raises:
         RuntimeError: On any parsing errors
@@ -390,10 +362,12 @@ def pmcxml2bioc(
         An iterator over the newly generated Bioc documents
     """
     try:
-        for pmc_doc in process_pmc_file(source, tag_handlers=tag_handlers):
+        for pmc_doc in process_pmc_file(source):
             bioc_doc = bioc.BioCDocument()
             bioc_doc.id = pmc_doc["pmid"]
-            bioc_doc.infons["title"] = " ".join([p.text for p in pmc_doc["textSources"]["title"]])
+            bioc_doc.infons["title"] = " ".join(
+                [p["text"] for p in pmc_doc["textSources"]["title"]]
+            )
             bioc_doc.infons["pmid"] = pmc_doc["pmid"]
             bioc_doc.infons["pmcid"] = pmc_doc["pmcid"]
             bioc_doc.infons["doi"] = pmc_doc["doi"]
@@ -406,10 +380,8 @@ def pmcxml2bioc(
             offset = 0
             for group_name, text_source_group in pmc_doc["textSources"].items():
                 subsection = None
-                for chunk in text_source_group:
-                    text_source, annotations = strip_annotation_markers(
-                        chunk.text, pmc_doc['annotations']
-                    )
+                for passage_dict in text_source_group:
+                    text_source = passage_dict["text"]
 
                     if trim_sentences:
                         text_source = trim_sentence_lengths(text_source)
@@ -423,32 +395,8 @@ def pmcxml2bioc(
                     passage.infons["section"] = group_name
                     passage.infons["subsection"] = subsection
 
-                    if chunk.xml_path:
-                        if all_xml_path_infon or set(chunk.xml_path.split('/')) & {
-                            'thead',
-                            'tbody',
-                            'fig',
-                        }:
-                            passage.infons["xml_path"] = chunk.xml_path
-
                     passage.text = text_source
                     passage.offset = offset
-
-                    if not trim_sentences and mark_citations:
-                        for annotation in annotations:
-                            for location in annotation.locations:
-                                location.offset += offset
-                            passage.add_annotation(annotation)
-
-                    for annotation in passage.annotations:
-                        for location in annotation.locations:
-                            if location.offset < passage.offset or (
-                                location.offset + location.length
-                                >= passage.offset + len(passage.text)
-                            ):
-                                raise AssertionError(
-                                    f"annotation.id={annotation.id} location.offset={location.offset} and passage.offset={passage.offset}"
-                                )
 
                     offset += len(text_source)
                     bioc_doc.add_passage(passage)

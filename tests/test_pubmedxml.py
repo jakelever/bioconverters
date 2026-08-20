@@ -2,7 +2,6 @@ from io import StringIO
 
 import pytest
 from bioconverters.main import docs2bioc
-from bioconverters.utils import TABLE_DELIMITER
 
 from .util import fetch_xml
 
@@ -15,9 +14,12 @@ def doc():
 
 
 def test_convert_has_expected_sections(doc):
-
+    # this article has a structured abstract with multiple <AbstractText> sections,
+    # each of which becomes its own 'abstract' passage
     sections = [p.infons['section'] for p in doc.passages]
-    assert sections == ['title', 'abstract']  # should only be 2 sections
+    assert sections[0] == 'title'
+    assert all(s == 'abstract' for s in sections[1:])
+    assert len(sections) > 2
 
 
 @pytest.mark.parametrize(
