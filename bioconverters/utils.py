@@ -6,7 +6,7 @@ from spans_and_trees import spans_to_passages, tree_to_spans
 
 # Remove empty brackets (that could happen if the contents have been removed already
 # e.g. for citation ( [] [] ) -> ( ) -> nothing
-def remove_brackets_without_words(text: str) -> str:
+def _remove_brackets_without_words(text: str) -> str:
     changed = True
     previous_text = text
     while changed:
@@ -20,14 +20,14 @@ def remove_brackets_without_words(text: str) -> str:
 
 # Some articles have titles like "[A study of ...]."
 # This removes the brackets while retaining the full stop
-def remove_brackets_from_titles(title_text: str) -> str:
+def _remove_brackets_from_titles(title_text: str) -> str:
     title_text = title_text.strip()
     if title_text[0] == "[" and title_text[-2:] == "].":
         title_text = title_text[1:-2] + "."
     return title_text
 
 
-def cleanup_pmc_text(text: str) -> str:
+def _cleanup_pmc_text(text: str) -> str:
     """
     Clean up common Unicode problems (control/separator characters, dash variants)
     without changing the length of the string, so offsets remain valid.
@@ -35,7 +35,7 @@ def cleanup_pmc_text(text: str) -> str:
     orig_text = str(text)
 
     # Remove some "control-like" characters (left/right separator)
-    text = text.replace("\u2028", " ").replace("\u2029", " ")
+    text = text.replace(" ", " ").replace(" ", " ")
     text = "".join(ch if unicodedata.category(ch)[0] != "C" else " " for ch in text)
     text = "".join(ch if unicodedata.category(ch)[0] != "Z" else " " for ch in text)
 
@@ -48,7 +48,7 @@ def cleanup_pmc_text(text: str) -> str:
     return text
 
 
-def collapse_whitespace(text: str) -> str:
+def _collapse_whitespace(text: str) -> str:
     """
     Collapse runs of whitespace (including newlines from pretty-printed source XML) into
     a single space and strip the ends.
@@ -56,7 +56,7 @@ def collapse_whitespace(text: str) -> str:
     return re.sub(r"\s+", " ", text).strip()
 
 
-def trim_sentence_lengths(text: str) -> str:
+def _trim_sentence_lengths(text: str) -> str:
     """
     Trim sentences to a maximum length, to avoid issues with buggy sentences in some PMC articles
     """
@@ -64,7 +64,7 @@ def trim_sentence_lengths(text: str) -> str:
     return ".".join(line[:MAXLENGTH] for line in text.split("."))
 
 
-def extract_passages(elements, ignore_tags, split_tags, keep_tags):
+def _extract_passages(elements, ignore_tags, split_tags, keep_tags):
     """
     Flatten a list of XML elements into cleaned-up text passages.
 
@@ -81,10 +81,10 @@ def extract_passages(elements, ignore_tags, split_tags, keep_tags):
     for elem in elements:
         text, spans = tree_to_spans(elem)
         for passage in spans_to_passages(text, spans, ignore_tags, split_tags, keep_tags):
-            t = cleanup_pmc_text(passage["text"])
-            t = collapse_whitespace(t)
-            t = remove_brackets_without_words(t)
-            t = collapse_whitespace(t)
+            t = _cleanup_pmc_text(passage["text"])
+            t = _collapse_whitespace(t)
+            t = _remove_brackets_without_words(t)
+            t = _collapse_whitespace(t)
             passage["text"] = t
             if t:
                 results.append(passage)

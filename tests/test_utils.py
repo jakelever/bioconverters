@@ -4,7 +4,7 @@ import xml.etree.ElementTree as etree
 import pytest
 
 from bioconverters.pmc_tags import PMC_IGNORE_TAGS, PMC_KEEP_TAGS, PMC_SPLIT_TAGS
-from bioconverters.utils import extract_passages, remove_brackets_without_words
+from bioconverters.utils import _extract_passages, _remove_brackets_without_words
 
 
 @pytest.mark.parametrize(
@@ -22,12 +22,12 @@ from bioconverters.utils import extract_passages, remove_brackets_without_words
     ],
 )
 def test_remove_brackets_without_words(test_input, expected):
-    assert expected == remove_brackets_without_words(test_input)
+    assert expected == _remove_brackets_without_words(test_input)
 
 
 def test_extract_figure_label():
     xml_input = '<article><fig id="pone-0026760-g003" position="float"><object-id pub-id-type="doi">10.1371/journal.pone.0026760.g003</object-id><label>Figure 3</label><caption><title>Anchorage-independent growth of ERBB2 mutants.</title></caption><graphic/></fig></article>'
-    passages = extract_passages(
+    passages = _extract_passages(
         [etree.fromstring(xml_input)], PMC_IGNORE_TAGS, PMC_SPLIT_TAGS, PMC_KEEP_TAGS
     )
     texts = [p['text'] for p in passages]
@@ -38,7 +38,7 @@ def test_extract_figure_label():
 
 def test_extract_title_with_italics():
     xml = '<article><article-title>Activating mutations in <italic>ALK</italic> provide a therapeutic target in neuroblastoma</article-title></article>'
-    passages = extract_passages([etree.fromstring(xml)], PMC_IGNORE_TAGS, PMC_SPLIT_TAGS, PMC_KEEP_TAGS)
+    passages = _extract_passages([etree.fromstring(xml)], PMC_IGNORE_TAGS, PMC_SPLIT_TAGS, PMC_KEEP_TAGS)
     assert len(passages) == 1
     assert (
         'Activating mutations in ALK provide a therapeutic target in neuroblastoma'
@@ -61,7 +61,7 @@ def test_drops_extlink_supplementary_text():
             </p>
         </article>'''
     )
-    passages = extract_passages([etree.fromstring(xml)], PMC_IGNORE_TAGS, PMC_SPLIT_TAGS, PMC_KEEP_TAGS)
+    passages = _extract_passages([etree.fromstring(xml)], PMC_IGNORE_TAGS, PMC_SPLIT_TAGS, PMC_KEEP_TAGS)
     text = ' '.join(p['text'] for p in passages)
     assert 'supplementary Figure S4C' not in text
     assert 'Annals of Oncology' not in text
@@ -91,7 +91,7 @@ def test_drops_extlink_urls_and_citation_markers():
     </p>
     </article>'''
     )
-    passages = extract_passages([etree.fromstring(xml)], PMC_IGNORE_TAGS, PMC_SPLIT_TAGS, PMC_KEEP_TAGS)
+    passages = _extract_passages([etree.fromstring(xml)], PMC_IGNORE_TAGS, PMC_SPLIT_TAGS, PMC_KEEP_TAGS)
     assert len(passages) == 1
     text = passages[0]['text']
     assert 'program PyMOL' in text

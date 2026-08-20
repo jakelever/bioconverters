@@ -14,7 +14,7 @@ except ImportError:
 import bioc
 
 from .pmc_tags import PMC_ALLOWED_SUBSECTIONS, PMC_IGNORE_TAGS, PMC_KEEP_TAGS, PMC_SPLIT_TAGS
-from .utils import extract_passages, remove_brackets_from_titles, trim_sentence_lengths
+from .utils import _extract_passages, _remove_brackets_from_titles, _trim_sentence_lengths
 
 _MONTH_NAME_TO_NUMBER = {m: i for i, m in enumerate(calendar.month_name)}
 _MONTH_NAME_TO_NUMBER.update({m: i for i, m in enumerate(calendar.month_abbr)})
@@ -40,15 +40,15 @@ class PmcMeta(TypedDict):
     journal_iso: str
 
 
-class PmcArticle(PmcMeta):
+class PMCArticle(PmcMeta):
     text_sources: TextSource
 
 
 def _extract_pmc_passages(elements):
-    return extract_passages(elements, PMC_IGNORE_TAGS, PMC_SPLIT_TAGS, PMC_KEEP_TAGS)
+    return _extract_passages(elements, PMC_IGNORE_TAGS, PMC_SPLIT_TAGS, PMC_KEEP_TAGS)
 
 
-def extract_article_content(article_elem: etree.Element) -> TextSource:
+def _extract_article_content(article_elem: etree.Element) -> TextSource:
     """
     Given the XML element representing the top-level of the scientific article, extract all the text sources
     """
@@ -64,7 +64,7 @@ def extract_article_content(article_elem: etree.Element) -> TextSource:
     title_text = _extract_pmc_passages(title)
     subtitle_text = _extract_pmc_passages(subtitle)
     for passage in title_text + subtitle_text:
-        passage["text"] = remove_brackets_from_titles(passage["text"])
+        passage["text"] = _remove_brackets_from_titles(passage["text"])
 
     # Extract the abstract from the paper
     abstract = article_elem.findall("./front/article-meta/abstract") + article_elem.findall(
@@ -99,7 +99,7 @@ def _field_text(elem, tag):
     return field.text.strip().replace("\n", " ")
 
 
-def get_meta_info_for_pmc_article(article_elem) -> PmcMeta:
+def _get_meta_info_for_pmc_article(article_elem) -> PmcMeta:
     # Attempt to extract the PubMed ID, PubMed Central ID and DOI
     id_map = {}
     article_id = article_elem.findall("./front/article-meta/article-id") + article_elem.findall(
@@ -179,7 +179,7 @@ def get_meta_info_for_pmc_article(article_elem) -> PmcMeta:
     )
 
 
-def apply_pmc_xlink_fix(source: Union[str, TextIO]) -> TextIO:
+def _apply_pmc_xlink_fix(source: Union[str, TextIO]) -> TextIO:
     """
     Hacky fix to add the xlink namespace to the article document if it uses it and has not defined it.
     A small number of PMC documents need this for the XML parser to successfully load it.
@@ -201,13 +201,13 @@ def apply_pmc_xlink_fix(source: Union[str, TextIO]) -> TextIO:
     return io.StringIO(content)
 
 
-def process_pmc_file(source: Union[str, TextIO]) -> Iterable[PmcArticle]:
-    source = apply_pmc_xlink_fix(source)
+def parse_pmcxml(source: Union[str, TextIO]) -> Iterable[PMCArticle]:
+    source = _apply_pmc_xlink_fix(source)
 
     # Skip to the article element in the file
     for event, elem in etree.iterparse(source, events=("start", "end", "start-ns", "end-ns")):
         if event == "end" and elem.tag == "article":
-            meta = get_meta_info_for_pmc_article(elem)
+            meta = _get_meta_info_for_pmc_article(elem)
 
             # We're going to process the main article along with any subarticles
             # And if any of the subarticles have distinguishing IDs (e.g. PMID), then
@@ -220,7 +220,7 @@ def process_pmc_file(source: Union[str, TextIO]) -> Iterable[PmcArticle]:
                     sub_meta = meta
                 else:
                     # Check if this subarticle has any distinguishing IDs and use them instead
-                    sub_meta = get_meta_info_for_pmc_article(article_elem)
+                    sub_meta = _get_meta_info_for_pmc_article(article_elem)
                     if not (sub_meta["pmid"] or sub_meta["pmcid"] or sub_meta["doi"]):
                         sub_meta["pmid"] = meta["pmid"]
                         sub_meta["pmcid"] = meta["pmcid"]
@@ -233,9 +233,9 @@ def process_pmc_file(source: Union[str, TextIO]) -> Iterable[PmcArticle]:
                         sub_meta["journal"] = meta["journal"]
                         sub_meta["journal_iso"] = meta["journal_iso"]
 
-                text_sources = extract_article_content(article_elem)
+                text_sources = _extract_article_content(article_elem)
 
-                yield PmcArticle({**sub_meta, "text_sources": text_sources})
+                yield PMCArticle({**sub_meta, "text_sources": text_sources})
 
             # Less important here (compared to abstracts) as each article file is not too big
             elem.clear()
@@ -259,7 +259,7 @@ def pmcxml2bioc(
         An iterator over the newly generated Bioc documents
     """
     try:
-        for pmc_doc in process_pmc_file(source):
+        for pmc_doc in parse_pmcxml(source):
             bioc_doc = bioc.BioCDocument()
             bioc_doc.id = pmc_doc["pmid"]
             bioc_doc.infons["title"] = " ".join(
@@ -281,7 +281,7 @@ def pmcxml2bioc(
                     text_source = passage_dict["text"]
 
                     if trim_sentences:
-                        text_source = trim_sentence_lengths(text_source)
+                        text_source = _trim_sentence_lengths(text_source)
 
                     passage = bioc.BioCPassage()
 

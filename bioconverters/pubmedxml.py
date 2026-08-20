@@ -14,16 +14,16 @@ import bioc
 
 from .pubmed_tags import PUBMED_IGNORE_TAGS, PUBMED_KEEP_TAGS, PUBMED_SPLIT_TAGS
 from .utils import (
-    extract_passages,
-    remove_brackets_from_titles,
-    remove_brackets_without_words,
-    trim_sentence_lengths,
+    _extract_passages,
+    _remove_brackets_from_titles,
+    _remove_brackets_without_words,
+    _trim_sentence_lengths,
 )
 
-DateTuple = Tuple[Optional[int], Optional[int], Optional[int]]
+_DateTuple = Tuple[Optional[int], Optional[int], Optional[int]]
 
 
-class MedlineArticle(TypedDict):
+class PubMedArticle(TypedDict):
     pmid: str
     pmcid: str
     doi: str
@@ -41,7 +41,7 @@ class MedlineArticle(TypedDict):
     publication_types: str
 
 
-def get_journal_date_for_medline_file(elem: etree.Element, pmid: Union[str, int]) -> DateTuple:
+def _get_journal_date_for_medline_file(elem: etree.Element, pmid: Union[str, int]) -> _DateTuple:
     """
     Scrapes the Journal Date from the Medline XML element tree.
 
@@ -105,7 +105,7 @@ def get_journal_date_for_medline_file(elem: etree.Element, pmid: Union[str, int]
     return pub_year, pub_month, pub_day
 
 
-def get_pubmed_entry_date(elem: etree.Element, pmid) -> DateTuple:
+def _get_pubmed_entry_date(elem: etree.Element, pmid) -> _DateTuple:
     """
     Args:
         pmid: not used?
@@ -141,7 +141,7 @@ def get_pubmed_entry_date(elem: etree.Element, pmid) -> DateTuple:
     return pub_year, pub_month, pub_day
 
 
-pub_type_skips = {
+_pub_type_skips = {
     "Research Support, N.I.H., Intramural",
     "Research Support, Non-U.S. Gov't",
     "Research Support, U.S. Gov't, P.H.S.",
@@ -149,12 +149,12 @@ pub_type_skips = {
     "Research Support, U.S. Gov't, Non-P.H.S.",
     "English Abstract",
 }
-doi_regex = re.compile(r"^[0-9\.]+\/.+[^\/]$")
+_doi_regex = re.compile(r"^[0-9\.]+\/.+[^\/]$")
 
 
-def process_medline_file(
+def parse_pubmedxml(
     source: Union[str, TextIO],
-) -> Iterable[MedlineArticle]:
+) -> Iterable[PubMedArticle]:
     """
     Args:
         source: path to the MEDLINE xml file
@@ -166,8 +166,8 @@ def process_medline_file(
             assert pmid_field is not None
             pmid = pmid_field.text
 
-            journal_year, journal_month, journal_day = get_journal_date_for_medline_file(elem, pmid)
-            entry_year, entry_month, entry_day = get_pubmed_entry_date(elem, pmid)
+            journal_year, journal_month, journal_day = _get_journal_date_for_medline_file(elem, pmid)
+            entry_year, entry_month, entry_day = _get_pubmed_entry_date(elem, pmid)
 
             j_comparison = tuple(
                 9999 if d is None else d for d in [journal_year, journal_month, journal_day]
@@ -266,7 +266,7 @@ def process_medline_file(
             dois = [
                 doi_elem.text
                 for doi_elem in doi_elems
-                if doi_elem.text and doi_regex.match(doi_elem.text)
+                if doi_elem.text and _doi_regex.match(doi_elem.text)
             ]
 
             doi = None
@@ -282,31 +282,31 @@ def process_medline_file(
             pub_type_elems = elem.findall(
                 "./MedlineCitation/Article/PublicationTypeList/PublicationType"
             )
-            pub_type = [e.text for e in pub_type_elems if e.text not in pub_type_skips]
+            pub_type = [e.text for e in pub_type_elems if e.text not in _pub_type_skips]
             pub_type_txt = "|".join(pub_type)
 
             # Extract the title of paper
             title = elem.findall("./MedlineCitation/Article/ArticleTitle")
-            title_passages = extract_passages(
+            title_passages = _extract_passages(
                 title, PUBMED_IGNORE_TAGS, PUBMED_SPLIT_TAGS, PUBMED_KEEP_TAGS
             )
             title_text = [
-                remove_brackets_from_titles(passage["text"])
+                _remove_brackets_from_titles(passage["text"])
                 for passage in title_passages
                 if passage["text"]
             ]
             title_text = [t for t in title_text if len(t) > 0]
             title_text = [html.unescape(t) for t in title_text]
-            title_text = [remove_brackets_without_words(t) for t in title_text]
+            title_text = [_remove_brackets_without_words(t) for t in title_text]
 
             # Extract the abstract from the paper
             abstract = elem.findall("./MedlineCitation/Article/Abstract/AbstractText")
-            abstract_passages = extract_passages(
+            abstract_passages = _extract_passages(
                 abstract, PUBMED_IGNORE_TAGS, PUBMED_SPLIT_TAGS, PUBMED_KEEP_TAGS
             )
             abstract_text = [passage["text"] for passage in abstract_passages if len(passage["text"]) > 0]
             abstract_text = [html.unescape(t) for t in abstract_text]
-            abstract_text = [remove_brackets_without_words(t) for t in abstract_text]
+            abstract_text = [_remove_brackets_without_words(t) for t in abstract_text]
 
             journal_title_fields = elem.findall("./MedlineCitation/Article/Journal/Title")
             journal_title_iso_fields = elem.findall(
@@ -338,7 +338,7 @@ def process_medline_file(
             document["supplementary_mesh"] = supplementary_concepts_txt
             document["publication_types"] = pub_type_txt
 
-            yield MedlineArticle(document)
+            yield PubMedArticle(document)
 
             # Important: clear the current element from memory to keep memory usage low
             elem.clear()
@@ -352,7 +352,7 @@ def pubmedxml2bioc(
     Args:
         source: path to the MEDLINE xml file
     """
-    for pm_doc in process_medline_file(source):
+    for pm_doc in parse_pubmedxml(source):
         bioc_doc = bioc.BioCDocument()
         bioc_doc.id = pm_doc["pmid"]
         bioc_doc.infons["title"] = " ".join(pm_doc["title"])
@@ -374,7 +374,7 @@ def pubmedxml2bioc(
         for section in ["title", "abstract"]:
             for text_source in pm_doc[section]:
                 if trim_sentences:
-                    text_source = trim_sentence_lengths(text_source)
+                    text_source = _trim_sentence_lengths(text_source)
                 passage = bioc.BioCPassage()
                 passage.infons["section"] = section
                 passage.text = text_source
