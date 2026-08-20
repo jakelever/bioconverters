@@ -28,7 +28,7 @@ def citation_offset_article():
 def test_convert_pmc_with_table_drops_table_content(table_article):
     file = StringIO(table_article)
     all_passages = []
-    for doc in pmcxml2bioc(file, trim_sentences=False):
+    for doc in pmcxml2bioc(file):
         all_passages.extend(doc.passages)
     all_text = " ".join(p.text for p in all_passages)
     # "ATP binding region" only appears inside the table body, which is now dropped entirely
@@ -41,4 +41,4 @@ def test_citation_offset_article_parses(citation_offset_article):
     # marking was removed, but it's cheap insurance to confirm this real
     # article still parses without raising.
     file = StringIO(citation_offset_article)
-    list(pmcxml2bioc(file, trim_sentences=False))
+    list(pmcxml2bioc(file))

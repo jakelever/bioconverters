@@ -11,7 +11,7 @@ from .util import fetch_xml
 def doc():
     article = fetch_xml('20628391', 'pubmed')  # has a table to be processed in it
     file = StringIO(article)
-    return list(pubmedxml2bioc(file, trim_sentences=False))[0]
+    return list(pubmedxml2bioc(file))[0]
 
 
 def test_convert_has_expected_sections(doc):

@@ -66,16 +66,10 @@ def _assign_subsections(text_sources: TextSource) -> None:
             passage["subsection"] = subsection
 
 
-def _extract_article_content(
-    article_elem: etree.Element, keep_tags, trim_sentences: bool = False
-) -> TextSource:
+def _extract_article_content(article_elem: etree.Element, keep_tags) -> TextSource:
     """
     Given the XML element representing the top-level of the scientific article, extract all the text sources
     """
-    # trim_sentences is currently a no-op - trimming needs reworking now that passages
-    # can contain inline XML markup rather than being plain text. TODO: sort this out.
-    del trim_sentences
-
     # Extract the title and subtitle of the paper
     title = article_elem.findall(
         "./front/article-meta/title-group/article-title"
@@ -228,7 +222,6 @@ def _apply_pmc_xlink_fix(source: Union[str, TextIO]) -> TextIO:
 
 def parse_pmcxml(
     source: Union[str, TextIO],
-    trim_sentences: bool = False,
     keep_tags=PMC_KEEP_TAGS,
 ) -> Iterable[PMCArticle]:
     """
@@ -236,7 +229,6 @@ def parse_pmcxml(
 
     Args:
         source: The text or file handle containing the PMC XML
-        trim_sentences: Trim text content to a maximum sentence length. Currently a no-op.
         keep_tags: tags whose markup is preserved inline in each passage's text (e.g. "sup",
             "italic") - pass an empty set for plain text with no markup.
     """
@@ -271,9 +263,7 @@ def parse_pmcxml(
                         sub_meta["journal"] = meta["journal"]
                         sub_meta["journal_iso"] = meta["journal_iso"]
 
-                text_sources = _extract_article_content(
-                    article_elem, keep_tags, trim_sentences=trim_sentences
-                )
+                text_sources = _extract_article_content(article_elem, keep_tags)
 
                 yield PMCArticle({**sub_meta, "text_sources": text_sources})
 
@@ -283,14 +273,12 @@ def parse_pmcxml(
 
 def pmcxml2bioc(
     source: Union[str, TextIO],
-    trim_sentences: bool = False,
 ) -> Iterator[Iterable[bioc.BioCDocument]]:
     """
     Convert a PMC XML file into its Bioc equivalent
 
     Args:
         source: The text or file handle containing the PMC XML
-        trim_sentences: Trim text content to a maximum sentence length. Currently a no-op.
 
     Raises:
         RuntimeError: On any parsing errors
@@ -299,7 +287,7 @@ def pmcxml2bioc(
         An iterator over the newly generated Bioc documents
     """
     try:
-        for pmc_doc in parse_pmcxml(source, trim_sentences=trim_sentences, keep_tags=set()):
+        for pmc_doc in parse_pmcxml(source, keep_tags=set()):
             bioc_doc = bioc.BioCDocument()
             bioc_doc.id = pmc_doc["pmid"]
             bioc_doc.infons["title"] = " ".join(

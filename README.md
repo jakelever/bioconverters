@@ -21,15 +21,16 @@ for doc in pmcxml2bioc('/path/to/pmc/xml/file.xml'):
     # do stuff with bioc doc
 ```
 
-## Trim Sentences
-
-You can also choose to truncate sentences to a maximum length. This is off by default. To turn this option off use the flag
-
-```python
-for doc in pmcxml2bioc('/path/to/pmc/xml/file.xml', trim_sentences=True):
-    # do stuff with bioc doc
-```
-
 ## Notes on text extraction
 
-Text is extracted using [spans_and_trees](https://github.com/jakelever/spans_and_trees). Table content, in-text citation markers, and cross-references are omitted from extracted text. Inline formatting (bold/italic/sup/sub/etc.) is currently flattened to plain text.
+Text is extracted using [spans_and_trees](https://github.com/jakelever/spans_and_trees). Table content, in-text citation markers, and cross-references are omitted from extracted text. Overly long, unbroken runs of text are automatically trimmed to a maximum length.
+
+`pmcxml2bioc` returns plain text. For inline formatting (bold/italic/sup/sub/etc.) preserved as markup, use `parse_pmcxml` directly, which returns `PMCArticle` dicts and accepts a `keep_tags` parameter:
+
+```python
+from bioconverters import parse_pmcxml
+
+for doc in parse_pmcxml('/path/to/pmc/xml/file.xml'):
+    # each passage's text may contain inline tags, e.g. "some <sup>1</sup>H text"
+    ...
+```
