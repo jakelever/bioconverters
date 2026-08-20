@@ -78,12 +78,12 @@ class PmcArticle(TypedDict):
     pmid: str
     pmcid: str
     doi: str
-    pubYear: str
-    pubMonth: str
-    pubDay: str
+    pub_year: str
+    pub_month: str
+    pub_day: str
     journal: str
-    journalISO: str
-    textSources: TextSource
+    journal_iso: str
+    text_sources: TextSource
 
 
 def extract_article_content(article_elem: etree.Element) -> TextSource:
@@ -329,12 +329,12 @@ def process_pmc_file(
                         "pmid": sub_pmid_text,
                         "pmcid": sub_pmcid_text,
                         "doi": sub_doi_text,
-                        "pubYear": sub_pub_year,
-                        "pubMonth": sub_pub_month,
-                        "pubDay": sub_pub_day,
+                        "pub_year": sub_pub_year,
+                        "pub_month": sub_pub_month,
+                        "pub_day": sub_pub_day,
                         "journal": sub_journal,
-                        "journalISO": sub_journal_iso,
-                        "textSources": text_sources,
+                        "journal_iso": sub_journal_iso,
+                        "text_sources": text_sources,
                     }
                 )
 
@@ -366,19 +366,19 @@ def pmcxml2bioc(
             bioc_doc = bioc.BioCDocument()
             bioc_doc.id = pmc_doc["pmid"]
             bioc_doc.infons["title"] = " ".join(
-                [p["text"] for p in pmc_doc["textSources"]["title"]]
+                [p["text"] for p in pmc_doc["text_sources"]["title"]]
             )
             bioc_doc.infons["pmid"] = pmc_doc["pmid"]
             bioc_doc.infons["pmcid"] = pmc_doc["pmcid"]
             bioc_doc.infons["doi"] = pmc_doc["doi"]
-            bioc_doc.infons["year"] = pmc_doc["pubYear"]
-            bioc_doc.infons["month"] = pmc_doc["pubMonth"]
-            bioc_doc.infons["day"] = pmc_doc["pubDay"]
+            bioc_doc.infons["year"] = pmc_doc["pub_year"]
+            bioc_doc.infons["month"] = pmc_doc["pub_month"]
+            bioc_doc.infons["day"] = pmc_doc["pub_day"]
             bioc_doc.infons["journal"] = pmc_doc["journal"]
-            bioc_doc.infons["journalISO"] = pmc_doc["journalISO"]
+            bioc_doc.infons["journal_iso"] = pmc_doc["journal_iso"]
 
             offset = 0
-            for group_name, text_source_group in pmc_doc["textSources"].items():
+            for group_name, text_source_group in pmc_doc["text_sources"].items():
                 subsection = None
                 for passage_dict in text_source_group:
                     text_source = passage_dict["text"]

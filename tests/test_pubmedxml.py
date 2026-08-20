@@ -31,7 +31,7 @@ def test_convert_has_expected_sections(doc):
         ('journal', 'British journal of cancer'),
         ('pmcid', 'PMC2939780'),
         ('doi', '10.1038/sj.bjc.6605776'),
-        ('journalISO', 'Br J Cancer'),
+        ('journal_iso', 'Br J Cancer'),
         (
             'title',
             'UGT1A and TYMS genetic variants predict toxicity and response of colorectal cancer patients treated with first-line irinotecan and fluorouracil combination therapy.',

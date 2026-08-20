@@ -27,18 +27,18 @@ class MedlineArticle(TypedDict):
     pmid: str
     pmcid: str
     doi: str
-    pubYear: Optional[int]
-    pubMonth: Optional[int]
-    pubDay: Optional[int]
+    pub_year: Optional[int]
+    pub_month: Optional[int]
+    pub_day: Optional[int]
     title: Iterable[str]
     abstract: str
     journal: str
-    journalISO: str
+    journal_iso: str
     authors: Iterable[str]
     chemicals: str
-    meshHeadings: str
-    supplementaryMesh: str
-    publicationTypes: str
+    mesh_headings: str
+    supplementary_mesh: str
+    publication_types: str
 
 
 def get_journal_date_for_medline_file(elem: etree.Element, pmid: Union[str, int]) -> DateTuple:
@@ -169,14 +169,14 @@ def process_medline_file(
             journal_year, journal_month, journal_day = get_journal_date_for_medline_file(elem, pmid)
             entry_year, entry_month, entry_day = get_pubmed_entry_date(elem, pmid)
 
-            jComparison = tuple(
+            j_comparison = tuple(
                 9999 if d is None else d for d in [journal_year, journal_month, journal_day]
             )
-            eComparison = tuple(
+            e_comparison = tuple(
                 9999 if d is None else d for d in [entry_year, entry_month, entry_day]
             )
             if (
-                jComparison < eComparison
+                j_comparison < e_comparison
             ):  # The PubMed entry has been delayed for some reason so let's try the journal data
                 pub_year, pub_month, pub_day = journal_year, journal_month, journal_day
             else:
@@ -325,18 +325,18 @@ def process_medline_file(
             document["pmid"] = pmid
             document["pmcid"] = pmcid
             document["doi"] = doi
-            document["pubYear"] = pub_year
-            document["pubMonth"] = pub_month
-            document["pubDay"] = pub_day
+            document["pub_year"] = pub_year
+            document["pub_month"] = pub_month
+            document["pub_day"] = pub_day
             document["title"] = title_text
             document["abstract"] = abstract_text
             document["journal"] = journal_title
-            document["journalISO"] = journal_iso_title
+            document["journal_iso"] = journal_iso_title
             document["authors"] = authors
             document["chemicals"] = chemicals_txt
-            document["meshHeadings"] = mesh_headings_txt
-            document["supplementaryMesh"] = supplementary_concepts_txt
-            document["publicationTypes"] = pub_type_txt
+            document["mesh_headings"] = mesh_headings_txt
+            document["supplementary_mesh"] = supplementary_concepts_txt
+            document["publication_types"] = pub_type_txt
 
             yield MedlineArticle(document)
 
@@ -359,16 +359,16 @@ def pubmedxml2bioc(
         bioc_doc.infons["pmid"] = pm_doc["pmid"]
         bioc_doc.infons["pmcid"] = pm_doc["pmcid"]
         bioc_doc.infons["doi"] = pm_doc["doi"]
-        bioc_doc.infons["year"] = pm_doc["pubYear"]
-        bioc_doc.infons["month"] = pm_doc["pubMonth"]
-        bioc_doc.infons["day"] = pm_doc["pubDay"]
+        bioc_doc.infons["year"] = pm_doc["pub_year"]
+        bioc_doc.infons["month"] = pm_doc["pub_month"]
+        bioc_doc.infons["day"] = pm_doc["pub_day"]
         bioc_doc.infons["journal"] = pm_doc["journal"]
-        bioc_doc.infons["journalISO"] = pm_doc["journalISO"]
+        bioc_doc.infons["journal_iso"] = pm_doc["journal_iso"]
         bioc_doc.infons["authors"] = ", ".join(pm_doc["authors"])
         bioc_doc.infons["chemicals"] = pm_doc["chemicals"]
-        bioc_doc.infons["meshHeadings"] = pm_doc["meshHeadings"]
-        bioc_doc.infons["supplementaryMesh"] = pm_doc["supplementaryMesh"]
-        bioc_doc.infons["publicationTypes"] = pm_doc["publicationTypes"]
+        bioc_doc.infons["mesh_headings"] = pm_doc["mesh_headings"]
+        bioc_doc.infons["supplementary_mesh"] = pm_doc["supplementary_mesh"]
+        bioc_doc.infons["publication_types"] = pm_doc["publication_types"]
 
         offset = 0
         for section in ["title", "abstract"]:
