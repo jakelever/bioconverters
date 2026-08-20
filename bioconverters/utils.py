@@ -56,7 +56,7 @@ def _collapse_whitespace(text: str) -> str:
     return re.sub(r"\s+", " ", text).strip()
 
 
-def _trim_sentence_lengths(text: str) -> str:
+def _trim_buggy_sentences(text: str) -> str:
     """
     Trim sentences to a maximum length, to avoid issues with buggy sentences in some PMC articles
     """

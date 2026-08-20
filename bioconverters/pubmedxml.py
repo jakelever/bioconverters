@@ -17,7 +17,7 @@ from .utils import (
     _extract_passages,
     _remove_brackets_from_titles,
     _remove_brackets_without_words,
-    _trim_sentence_lengths,
+    _trim_buggy_sentences,
 )
 
 _DateTuple = Tuple[Optional[int], Optional[int], Optional[int]]
@@ -374,7 +374,7 @@ def pubmedxml2bioc(
         for section in ["title", "abstract"]:
             for text_source in pm_doc[section]:
                 if trim_sentences:
-                    text_source = _trim_sentence_lengths(text_source)
+                    text_source = _trim_buggy_sentences(text_source)
                 passage = bioc.BioCPassage()
                 passage.infons["section"] = section
                 passage.text = text_source

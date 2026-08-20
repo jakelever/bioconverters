@@ -14,7 +14,7 @@ except ImportError:
 import bioc
 
 from .pmc_tags import PMC_ALLOWED_SUBSECTIONS, PMC_IGNORE_TAGS, PMC_KEEP_TAGS, PMC_SPLIT_TAGS
-from .utils import _extract_passages, _remove_brackets_from_titles, _trim_sentence_lengths
+from .utils import _extract_passages, _remove_brackets_from_titles, _trim_buggy_sentences
 
 _MONTH_NAME_TO_NUMBER = {m: i for i, m in enumerate(calendar.month_name)}
 _MONTH_NAME_TO_NUMBER.update({m: i for i, m in enumerate(calendar.month_abbr)})
@@ -48,7 +48,21 @@ def _extract_pmc_passages(elements):
     return _extract_passages(elements, PMC_IGNORE_TAGS, PMC_SPLIT_TAGS, PMC_KEEP_TAGS)
 
 
-def _extract_article_content(article_elem: etree.Element) -> TextSource:
+def _assign_subsections(text_sources: TextSource) -> None:
+    """
+    Walk each group of passages in document order, tagging each with the most recently seen
+    subsection heading (e.g. "methods", "discussion") from PMC_ALLOWED_SUBSECTIONS, if any.
+    """
+    for passages in text_sources.values():
+        subsection = None
+        for passage in passages:
+            subsection_check = passage["text"].lower().strip("01234567890. ")
+            if subsection_check in PMC_ALLOWED_SUBSECTIONS:
+                subsection = subsection_check
+            passage["subsection"] = subsection
+
+
+def _extract_article_content(article_elem: etree.Element, trim_sentences: bool = False) -> TextSource:
     """
     Given the XML element representing the top-level of the scientific article, extract all the text sources
     """
@@ -86,8 +100,12 @@ def _extract_article_content(article_elem: etree.Element) -> TextSource:
         for passage in text_sources[k]:
             if passage["text"]:
                 passage["text"] = html.unescape(passage["text"])
+                if trim_sentences:
+                    passage["text"] = _trim_buggy_sentences(passage["text"])
                 cleaned.append(passage)
         text_sources[k] = cleaned
+
+    _assign_subsections(text_sources)
 
     return text_sources
 
@@ -201,7 +219,17 @@ def _apply_pmc_xlink_fix(source: Union[str, TextIO]) -> TextIO:
     return io.StringIO(content)
 
 
-def parse_pmcxml(source: Union[str, TextIO]) -> Iterable[PMCArticle]:
+def parse_pmcxml(
+    source: Union[str, TextIO],
+    trim_sentences: bool = False,
+) -> Iterable[PMCArticle]:
+    """
+    Parse a PMC XML file into a series of PMCArticle dicts (one per article/sub-article).
+
+    Args:
+        source: The text or file handle containing the PMC XML
+        trim_sentences: Trim text content to a maximum sentence length.
+    """
     source = _apply_pmc_xlink_fix(source)
 
     # Skip to the article element in the file
@@ -233,7 +261,7 @@ def parse_pmcxml(source: Union[str, TextIO]) -> Iterable[PMCArticle]:
                         sub_meta["journal"] = meta["journal"]
                         sub_meta["journal_iso"] = meta["journal_iso"]
 
-                text_sources = _extract_article_content(article_elem)
+                text_sources = _extract_article_content(article_elem, trim_sentences=trim_sentences)
 
                 yield PMCArticle({**sub_meta, "text_sources": text_sources})
 
@@ -259,7 +287,7 @@ def pmcxml2bioc(
         An iterator over the newly generated Bioc documents
     """
     try:
-        for pmc_doc in parse_pmcxml(source):
+        for pmc_doc in parse_pmcxml(source, trim_sentences=trim_sentences):
             bioc_doc = bioc.BioCDocument()
             bioc_doc.id = pmc_doc["pmid"]
             bioc_doc.infons["title"] = " ".join(
@@ -276,21 +304,13 @@ def pmcxml2bioc(
 
             offset = 0
             for group_name, text_source_group in pmc_doc["text_sources"].items():
-                subsection = None
                 for passage_dict in text_source_group:
                     text_source = passage_dict["text"]
 
-                    if trim_sentences:
-                        text_source = _trim_sentence_lengths(text_source)
-
                     passage = bioc.BioCPassage()
 
-                    subsection_check = text_source.lower().strip("01234567890. ")
-                    if subsection_check in PMC_ALLOWED_SUBSECTIONS:
-                        subsection = subsection_check
-
                     passage.infons["section"] = group_name
-                    passage.infons["subsection"] = subsection
+                    passage.infons["subsection"] = passage_dict["subsection"]
 
                     passage.text = text_source
                     passage.offset = offset
