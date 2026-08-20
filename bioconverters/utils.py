@@ -99,6 +99,7 @@ def _extract_passages(elements, ignore_tags, split_tags, keep_tags):
         text = _cleanup_pmc_text(text)
         for passage in spans_to_passages(text, spans, ignore_tags, split_tags, keep_tags):
             xml_string = _passage_to_xml_string(passage["text"], passage["spans"])
+            xml_string = _collapse_whitespace(xml_string)
             if xml_string:
                 results.append(xml_string)
 
