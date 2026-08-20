@@ -1,7 +1,8 @@
 import re
 import unicodedata
+import xml.etree.ElementTree as etree
 
-from spans_and_trees import spans_to_passages, tree_to_spans
+from spans_and_trees import spans_to_passages, spans_to_tree, tree_to_spans
 
 
 # Remove empty brackets (that could happen if the contents have been removed already
@@ -35,7 +36,7 @@ def _cleanup_pmc_text(text: str) -> str:
     orig_text = str(text)
 
     # Remove some "control-like" characters (left/right separator)
-    text = text.replace(" ", " ").replace(" ", " ")
+    text = text.replace(" ", " ").replace(" ", " ")
     text = "".join(ch if unicodedata.category(ch)[0] != "C" else " " for ch in text)
     text = "".join(ch if unicodedata.category(ch)[0] != "Z" else " " for ch in text)
 
@@ -64,15 +65,30 @@ def _trim_buggy_sentences(text: str) -> str:
     return ".".join(line[:MAXLENGTH] for line in text.split("."))
 
 
+def _passage_to_xml_string(text: str, spans: list) -> str:
+    """
+    Rebuild the inner XML content (no outer wrapper element) for a passage's text and
+    kept spans, e.g. "some <sup>1</sup>H text". With no spans (keep_tags=set()), this is
+    just the plain text, unchanged.
+    """
+    elem = spans_to_tree(text, spans)
+    inner = elem.text or ""
+    for child in elem:
+        inner += etree.tostring(child, encoding="unicode")
+    return inner
+
+
 def _extract_passages(elements, ignore_tags, split_tags, keep_tags):
     """
-    Flatten a list of XML elements into cleaned-up text passages.
+    Flatten a list of XML elements into cleaned-up XML strings, one per passage. Each
+    string is the passage's plain text with any keep_tags spans preserved as inline
+    markup (e.g. "some <sup>1</sup>H text"). With keep_tags empty, this is just plain text.
 
     Args:
         elements: an XML element, or a list of XML elements, to be processed
         ignore_tags: tags whose covered text is dropped
         split_tags: tags that create passage boundaries
-        keep_tags: tags whose spans are retained (offset-adjusted) on the returned passages
+        keep_tags: tags whose spans are preserved as inline markup in the returned strings
     """
     if not isinstance(elements, list):
         elements = [elements]
@@ -80,13 +96,10 @@ def _extract_passages(elements, ignore_tags, split_tags, keep_tags):
     results = []
     for elem in elements:
         text, spans = tree_to_spans(elem)
+        text = _cleanup_pmc_text(text)
         for passage in spans_to_passages(text, spans, ignore_tags, split_tags, keep_tags):
-            t = _cleanup_pmc_text(passage["text"])
-            t = _collapse_whitespace(t)
-            t = _remove_brackets_without_words(t)
-            t = _collapse_whitespace(t)
-            passage["text"] = t
-            if t:
-                results.append(passage)
+            xml_string = _passage_to_xml_string(passage["text"], passage["spans"])
+            if xml_string:
+                results.append(xml_string)
 
     return results

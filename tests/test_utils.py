@@ -30,22 +30,31 @@ def test_extract_figure_label():
     passages = _extract_passages(
         [etree.fromstring(xml_input)], PMC_IGNORE_TAGS, PMC_SPLIT_TAGS, PMC_KEEP_TAGS
     )
-    texts = [p['text'] for p in passages]
-    assert 'Figure 3' in texts
+    assert 'Figure 3' in passages
     # the object-id (doi) is an ignore_tag, so its content shouldn't survive
-    assert not any('10.1371' in t for t in texts)
+    assert not any('10.1371' in t for t in passages)
 
 
 def test_extract_title_with_italics():
     xml = '<article><article-title>Activating mutations in <italic>ALK</italic> provide a therapeutic target in neuroblastoma</article-title></article>'
     passages = _extract_passages([etree.fromstring(xml)], PMC_IGNORE_TAGS, PMC_SPLIT_TAGS, PMC_KEEP_TAGS)
     assert len(passages) == 1
+    # italic is a keep_tag, so ALK should come through as inline markup in the XML string
+    assert (
+        'Activating mutations in <italic>ALK</italic> provide a therapeutic target in neuroblastoma'
+        == passages[0]
+    )
+
+
+def test_extract_title_without_keep_tags():
+    xml = '<article><article-title>Activating mutations in <italic>ALK</italic> provide a therapeutic target in neuroblastoma</article-title></article>'
+    passages = _extract_passages([etree.fromstring(xml)], PMC_IGNORE_TAGS, PMC_SPLIT_TAGS, set())
+    assert len(passages) == 1
+    # with keep_tags empty, the result is just plain text - no markup at all
     assert (
         'Activating mutations in ALK provide a therapeutic target in neuroblastoma'
-        == passages[0]['text']
+        == passages[0]
     )
-    # italic is a keep_tag, so ALK should still come through as an attached span
-    assert passages[0]['spans'] == [(24, 3, 'italic', {})]
 
 
 def test_drops_extlink_supplementary_text():
@@ -62,7 +71,7 @@ def test_drops_extlink_supplementary_text():
         </article>'''
     )
     passages = _extract_passages([etree.fromstring(xml)], PMC_IGNORE_TAGS, PMC_SPLIT_TAGS, PMC_KEEP_TAGS)
-    text = ' '.join(p['text'] for p in passages)
+    text = ' '.join(passages)
     assert 'supplementary Figure S4C' not in text
     assert 'Annals of Oncology' not in text
 
@@ -93,7 +102,7 @@ def test_drops_extlink_urls_and_citation_markers():
     )
     passages = _extract_passages([etree.fromstring(xml)], PMC_IGNORE_TAGS, PMC_SPLIT_TAGS, PMC_KEEP_TAGS)
     assert len(passages) == 1
-    text = passages[0]['text']
+    text = passages[0]
     assert 'program PyMOL' in text
     assert '[14]' not in text
     assert '//www.' not in text

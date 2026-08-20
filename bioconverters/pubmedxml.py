@@ -290,12 +290,7 @@ def parse_pubmedxml(
             title_passages = _extract_passages(
                 title, PUBMED_IGNORE_TAGS, PUBMED_SPLIT_TAGS, PUBMED_KEEP_TAGS
             )
-            title_text = [
-                _remove_brackets_from_titles(passage["text"])
-                for passage in title_passages
-                if passage["text"]
-            ]
-            title_text = [t for t in title_text if len(t) > 0]
+            title_text = [_remove_brackets_from_titles(t) for t in title_passages]
             title_text = [html.unescape(t) for t in title_text]
             title_text = [_remove_brackets_without_words(t) for t in title_text]
 
@@ -304,8 +299,7 @@ def parse_pubmedxml(
             abstract_passages = _extract_passages(
                 abstract, PUBMED_IGNORE_TAGS, PUBMED_SPLIT_TAGS, PUBMED_KEEP_TAGS
             )
-            abstract_text = [passage["text"] for passage in abstract_passages if len(passage["text"]) > 0]
-            abstract_text = [html.unescape(t) for t in abstract_text]
+            abstract_text = [html.unescape(t) for t in abstract_passages]
             abstract_text = [_remove_brackets_without_words(t) for t in abstract_text]
 
             journal_title_fields = elem.findall("./MedlineCitation/Article/Journal/Title")
