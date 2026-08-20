@@ -45,10 +45,69 @@ class PMCArticle(PmcMeta):
     text_sources: TextSource
 
 
-def _extract_pmc_passages(elements, keep_tags, return_xml, trim_buggy_sentences):
-    return _extract_passages(
-        elements, PMC_IGNORE_TAGS, PMC_SPLIT_TAGS, keep_tags, return_xml, trim_buggy_sentences
+_CITATION_TAG = "citation-ref"
+
+
+def _extract_pmc_passages(elements, keep_tags, return_xml, trim_buggy_sentences, inject_citations):
+    effective_keep_tags = keep_tags | {_CITATION_TAG} if inject_citations else keep_tags
+    results = _extract_passages(
+        elements,
+        PMC_IGNORE_TAGS,
+        PMC_SPLIT_TAGS,
+        effective_keep_tags,
+        return_xml,
+        trim_buggy_sentences,
     )
+    if inject_citations:
+        results = [_restore_citation_tag(r) for r in results]
+    return results
+
+
+def _build_citation_lookup(article_elem):
+    """
+    Map each <ref id="..."> in the article's reference list to whatever pub-id identifiers
+    (e.g. pmid, doi) are found inside it.
+    """
+    lookup = {}
+    for ref in article_elem.findall(".//ref-list/ref"):
+        ref_id = ref.attrib.get("id")
+        if not ref_id:
+            continue
+        info = {}
+        for pub_id in ref.findall(".//pub-id"):
+            pub_id_type = pub_id.attrib.get("pub-id-type")
+            if pub_id_type and pub_id.text:
+                info[pub_id_type] = pub_id.text.strip()
+        if info:
+            lookup[ref_id] = info
+    return lookup
+
+
+def _inject_citations(article_elem, citation_lookup) -> None:
+    """
+    For every in-text <xref ref-type="bibr"> citation, look up its pub-id values (e.g.
+    pmid, doi) by rid and set them as attributes directly on the xref element. Handles
+    xrefs referencing multiple ids (space-separated rid, e.g. a grouped "[1,2,3]" citation)
+    by joining multiple found values for the same pub-id-type with "|". Retags matching
+    elements to a private placeholder tag so they can be selectively kept (with their now-
+    enriched attributes, restored back to "xref" once serialized) separately from other
+    xref types (e.g. figure/table references), which stay dropped as before.
+    """
+    for xref in article_elem.iter("xref"):
+        if xref.attrib.get("ref-type") != "bibr":
+            continue
+        rids = (xref.attrib.get("rid") or "").split()
+        merged = {}
+        for rid in rids:
+            for pub_id_type, value in citation_lookup.get(rid, {}).items():
+                merged.setdefault(pub_id_type, []).append(value)
+        for pub_id_type, values in merged.items():
+            xref.set(pub_id_type, "|".join(values))
+        xref.tag = _CITATION_TAG
+
+
+def _restore_citation_tag(xml_string: str) -> str:
+    return xml_string.replace(f"<{_CITATION_TAG}", "<xref").replace(f"</{_CITATION_TAG}>", "</xref>")
 
 
 def _assign_subsections(text_sources: TextSource) -> None:
@@ -69,11 +128,15 @@ def _assign_subsections(text_sources: TextSource) -> None:
 
 
 def _extract_article_content(
-    article_elem: etree.Element, keep_tags, return_xml, trim_buggy_sentences
+    article_elem: etree.Element, keep_tags, return_xml, trim_buggy_sentences, inject_citations
 ) -> TextSource:
     """
     Given the XML element representing the top-level of the scientific article, extract all the text sources
     """
+    if inject_citations:
+        citation_lookup = _build_citation_lookup(article_elem)
+        _inject_citations(article_elem, citation_lookup)
+
     # Extract the title and subtitle of the paper
     title = article_elem.findall(
         "./front/article-meta/title-group/article-title"
@@ -85,11 +148,15 @@ def _extract_article_content(
 
     title_text = [
         {"text": _remove_brackets_from_titles(t)}
-        for t in _extract_pmc_passages(title, keep_tags, return_xml, trim_buggy_sentences)
+        for t in _extract_pmc_passages(
+            title, keep_tags, return_xml, trim_buggy_sentences, inject_citations
+        )
     ]
     subtitle_text = [
         {"text": _remove_brackets_from_titles(t)}
-        for t in _extract_pmc_passages(subtitle, keep_tags, return_xml, trim_buggy_sentences)
+        for t in _extract_pmc_passages(
+            subtitle, keep_tags, return_xml, trim_buggy_sentences, inject_citations
+        )
     ]
 
     # Extract the abstract from the paper
@@ -102,25 +169,39 @@ def _extract_article_content(
         "subtitle": subtitle_text,
         "abstract": [
             {"text": t}
-            for t in _extract_pmc_passages(abstract, keep_tags, return_xml, trim_buggy_sentences)
+            for t in _extract_pmc_passages(
+                abstract, keep_tags, return_xml, trim_buggy_sentences, inject_citations
+            )
         ],
         # Extract the full text from the paper as well as supplementaries and floating blocks of text
         "article": [
             {"text": t}
             for t in _extract_pmc_passages(
-                article_elem.findall("./body"), keep_tags, return_xml, trim_buggy_sentences
+                article_elem.findall("./body"),
+                keep_tags,
+                return_xml,
+                trim_buggy_sentences,
+                inject_citations,
             )
         ],
         "back": [
             {"text": t}
             for t in _extract_pmc_passages(
-                article_elem.findall("./back"), keep_tags, return_xml, trim_buggy_sentences
+                article_elem.findall("./back"),
+                keep_tags,
+                return_xml,
+                trim_buggy_sentences,
+                inject_citations,
             )
         ],
         "floating": [
             {"text": t}
             for t in _extract_pmc_passages(
-                article_elem.findall("./floats-group"), keep_tags, return_xml, trim_buggy_sentences
+                article_elem.findall("./floats-group"),
+                keep_tags,
+                return_xml,
+                trim_buggy_sentences,
+                inject_citations,
             )
         ],
     }
@@ -194,7 +275,9 @@ def _get_meta_info_for_pmc_article(article_elem) -> PmcMeta:
     )
     assert len(journal) <= 1
     journal_text = " ".join(
-        _extract_pmc_passages(journal, set(), return_xml=False, trim_buggy_sentences=True)
+        _extract_pmc_passages(
+            journal, set(), return_xml=False, trim_buggy_sentences=True, inject_citations=False
+        )
     )
 
     journal_iso_text = ""
@@ -246,6 +329,7 @@ def parse_pmcxml(
     keep_tags=PMC_KEEP_TAGS,
     return_xml: bool = True,
     trim_buggy_sentences: bool = True,
+    inject_citations: bool = True,
 ) -> Iterable[PMCArticle]:
     """
     Parse a PMC XML file into a series of PMCArticle dicts (one per article/sub-article).
@@ -258,6 +342,13 @@ def parse_pmcxml(
             or as plain, unescaped text with any markup stripped if False.
         trim_buggy_sentences: trim overly long, unbroken runs of text to a maximum length,
             to avoid issues with buggy sentences in some PMC articles.
+        inject_citations: for each in-text <xref ref-type="bibr"> citation, look up its
+            referenced <ref>'s pub-id values (e.g. pmid, doi) and add them as attributes on
+            the xref tag, e.g. <xref pmid="12345678">1</xref>. Citation xrefs are then kept
+            in the output (with the citation marker text visible) instead of being dropped
+            like other ignored tags - this affects return_xml=False output too, since the
+            citation marker text is no longer blanked (though the injected attributes
+            themselves don't survive being stripped down to plain text).
     """
     source = _apply_pmc_xlink_fix(source)
 
@@ -291,7 +382,7 @@ def parse_pmcxml(
                         sub_meta["journal_iso"] = meta["journal_iso"]
 
                 text_sources = _extract_article_content(
-                    article_elem, keep_tags, return_xml, trim_buggy_sentences
+                    article_elem, keep_tags, return_xml, trim_buggy_sentences, inject_citations
                 )
 
                 yield PMCArticle({**sub_meta, "text_sources": text_sources})
@@ -316,7 +407,9 @@ def pmcxml2bioc(
         An iterator over the newly generated Bioc documents
     """
     try:
-        for pmc_doc in parse_pmcxml(source, keep_tags=set(), return_xml=False):
+        for pmc_doc in parse_pmcxml(
+            source, keep_tags=set(), return_xml=False, inject_citations=False
+        ):
             bioc_doc = bioc.BioCDocument()
             bioc_doc.id = pmc_doc["pmid"]
             bioc_doc.infons["title"] = " ".join(
