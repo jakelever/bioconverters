@@ -57,6 +57,9 @@ def collapse_whitespace(text: str) -> str:
 
 
 def trim_sentence_lengths(text: str) -> str:
+    """
+    Trim sentences to a maximum length, to avoid issues with buggy sentences in some PMC articles
+    """
     MAXLENGTH = 90000
     return ".".join(line[:MAXLENGTH] for line in text.split("."))
 
