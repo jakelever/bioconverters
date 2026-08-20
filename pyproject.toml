@@ -32,5 +32,4 @@ test = ["pytest", "pytest-cov", "requests"]
 Homepage = "https://github.com/jakelever/bioconverters"
 
 [tool.setuptools]
-package-dir = { "" = "src" }
 packages = ["bioconverters"]
