@@ -45,8 +45,8 @@ class PMCArticle(PmcMeta):
     text_sources: TextSource
 
 
-def _extract_pmc_passages(elements, keep_tags):
-    return _extract_passages(elements, PMC_IGNORE_TAGS, PMC_SPLIT_TAGS, keep_tags)
+def _extract_pmc_passages(elements, keep_tags, return_xml):
+    return _extract_passages(elements, PMC_IGNORE_TAGS, PMC_SPLIT_TAGS, keep_tags, return_xml)
 
 
 def _assign_subsections(text_sources: TextSource) -> None:
@@ -66,7 +66,7 @@ def _assign_subsections(text_sources: TextSource) -> None:
             passage["subsection"] = subsection
 
 
-def _extract_article_content(article_elem: etree.Element, keep_tags) -> TextSource:
+def _extract_article_content(article_elem: etree.Element, keep_tags, return_xml) -> TextSource:
     """
     Given the XML element representing the top-level of the scientific article, extract all the text sources
     """
@@ -80,10 +80,12 @@ def _extract_article_content(article_elem: etree.Element, keep_tags) -> TextSour
     ) + article_elem.findall("./front-stub/title-group/subtitle")
 
     title_text = [
-        {"text": _remove_brackets_from_titles(t)} for t in _extract_pmc_passages(title, keep_tags)
+        {"text": _remove_brackets_from_titles(t)}
+        for t in _extract_pmc_passages(title, keep_tags, return_xml)
     ]
     subtitle_text = [
-        {"text": _remove_brackets_from_titles(t)} for t in _extract_pmc_passages(subtitle, keep_tags)
+        {"text": _remove_brackets_from_titles(t)}
+        for t in _extract_pmc_passages(subtitle, keep_tags, return_xml)
     ]
 
     # Extract the abstract from the paper
@@ -94,15 +96,21 @@ def _extract_article_content(article_elem: etree.Element, keep_tags) -> TextSour
     text_sources: TextSource = {
         "title": title_text,
         "subtitle": subtitle_text,
-        "abstract": [{"text": t} for t in _extract_pmc_passages(abstract, keep_tags)],
+        "abstract": [{"text": t} for t in _extract_pmc_passages(abstract, keep_tags, return_xml)],
         # Extract the full text from the paper as well as supplementaries and floating blocks of text
         "article": [
-            {"text": t} for t in _extract_pmc_passages(article_elem.findall("./body"), keep_tags)
+            {"text": t}
+            for t in _extract_pmc_passages(article_elem.findall("./body"), keep_tags, return_xml)
         ],
-        "back": [{"text": t} for t in _extract_pmc_passages(article_elem.findall("./back"), keep_tags)],
+        "back": [
+            {"text": t}
+            for t in _extract_pmc_passages(article_elem.findall("./back"), keep_tags, return_xml)
+        ],
         "floating": [
             {"text": t}
-            for t in _extract_pmc_passages(article_elem.findall("./floats-group"), keep_tags)
+            for t in _extract_pmc_passages(
+                article_elem.findall("./floats-group"), keep_tags, return_xml
+            )
         ],
     }
 
@@ -174,7 +182,7 @@ def _get_meta_info_for_pmc_article(article_elem) -> PmcMeta:
         + article_elem.findall("./front-stub/journal-title-group/journal-title")
     )
     assert len(journal) <= 1
-    journal_text = " ".join(_extract_pmc_passages(journal, set()))
+    journal_text = " ".join(_extract_pmc_passages(journal, set(), return_xml=False))
 
     journal_iso_text = ""
     journal_iso = article_elem.findall("./front/journal-meta/journal-id") + article_elem.findall(
@@ -223,6 +231,7 @@ def _apply_pmc_xlink_fix(source: Union[str, TextIO]) -> TextIO:
 def parse_pmcxml(
     source: Union[str, TextIO],
     keep_tags=PMC_KEEP_TAGS,
+    return_xml: bool = True,
 ) -> Iterable[PMCArticle]:
     """
     Parse a PMC XML file into a series of PMCArticle dicts (one per article/sub-article).
@@ -231,6 +240,8 @@ def parse_pmcxml(
         source: The text or file handle containing the PMC XML
         keep_tags: tags whose markup is preserved inline in each passage's text (e.g. "sup",
             "italic") - pass an empty set for plain text with no markup.
+        return_xml: return each passage's text as a marked-up XML string if True (default),
+            or as plain, unescaped text with any markup stripped if False.
     """
     source = _apply_pmc_xlink_fix(source)
 
@@ -263,7 +274,7 @@ def parse_pmcxml(
                         sub_meta["journal"] = meta["journal"]
                         sub_meta["journal_iso"] = meta["journal_iso"]
 
-                text_sources = _extract_article_content(article_elem, keep_tags)
+                text_sources = _extract_article_content(article_elem, keep_tags, return_xml)
 
                 yield PMCArticle({**sub_meta, "text_sources": text_sources})
 
@@ -287,7 +298,7 @@ def pmcxml2bioc(
         An iterator over the newly generated Bioc documents
     """
     try:
-        for pmc_doc in parse_pmcxml(source, keep_tags=set()):
+        for pmc_doc in parse_pmcxml(source, keep_tags=set(), return_xml=False):
             bioc_doc = bioc.BioCDocument()
             bioc_doc.id = pmc_doc["pmid"]
             bioc_doc.infons["title"] = " ".join(

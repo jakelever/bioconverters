@@ -1,6 +1,8 @@
 import re
 import unicodedata
 import xml.etree.ElementTree as etree
+from xml.sax.saxutils import escape as _xml_escape
+from xml.sax.saxutils import unescape as _xml_unescape
 
 from spans_and_trees import spans_to_passages, spans_to_tree, tree_to_spans
 
@@ -57,29 +59,62 @@ def _collapse_whitespace(text: str) -> str:
     return re.sub(r"\s+", " ", text).strip()
 
 
-def _trim_buggy_sentences(text) -> etree.Element:
+def _trim_buggy_sentences(text: str) -> str:
     """
-    
+    Replace overly long "sentences" (period-delimited segments) with a period followed by
+    enough spaces to keep the text the same length, to avoid issues with buggy, unbroken
+    runs of text in some PMC articles. Preserves length (spaces get collapsed later) so no
+    span-offset adjustment is needed.
     """
     MAXLENGTH = 90000
 
-    trimmed_text = ".".join(segment[:MAXLENGTH] + '.' + ' '*len(segment-MAXLENGTH-1) for segment in text.split("."))
+    segments = []
+    for segment in text.split("."):
+        if len(segment) > MAXLENGTH:
+            segment = segment[:MAXLENGTH] + "." + " " * (len(segment) - MAXLENGTH - 1)
+        segments.append(segment)
+
+    trimmed_text = ".".join(segments)
     assert len(trimmed_text) == len(text)
 
     return trimmed_text
 
 
+_TAG_RE = re.compile(r"<[^>]+>")
+
+
+def _strip_markup(xml_string: str) -> str:
+    """
+    Strip all XML tags and unescape entities (e.g. &amp; -> &), returning plain readable text.
+    """
+    return _xml_unescape(_TAG_RE.sub("", xml_string))
+
+
+def _tree_to_xml_string(tree: etree.Element) -> str:
+    """
+    Serialize the inner XML content of a tree (no outer wrapper element), e.g.
+    "some <sup>1</sup>H text". With no children (keep_tags=set()), this is just the
+    tree's plain text, XML-escaped.
+    """
+    inner = _xml_escape(tree.text) if tree.text else ""
+    for child in tree:
+        inner += etree.tostring(child, encoding="unicode")
+    return inner
+
+
 def _extract_passages(elements, ignore_tags, split_tags, keep_tags, return_xml):
     """
-    Flatten a list of XML elements into cleaned-up XML strings, one per passage. Each
-    string is the passage's plain text with any keep_tags spans preserved as inline
-    markup (e.g. "some <sup>1</sup>H text"). With keep_tags empty, this is just plain text.
+    Flatten a list of XML elements into cleaned-up passages, one string per passage. With
+    return_xml=True, any keep_tags spans are preserved as inline markup (e.g. "some
+    <sup>1</sup>H text"). With return_xml=False, the result is plain, unescaped text with
+    any markup stripped.
 
     Args:
         elements: an XML element, or a list of XML elements, to be processed
         ignore_tags: tags whose covered text is dropped
         split_tags: tags that create passage boundaries
-        keep_tags: tags whose spans are preserved as inline markup in the returned strings
+        keep_tags: tags whose spans are preserved while building each passage
+        return_xml: return marked-up XML strings if True, plain unescaped text if False
     """
     if not isinstance(elements, list):
         elements = [elements]
@@ -89,15 +124,15 @@ def _extract_passages(elements, ignore_tags, split_tags, keep_tags, return_xml):
         text, spans = tree_to_spans(elem)
         text = _cleanup_pmc_text(text)
         for passage in spans_to_passages(text, spans, ignore_tags, split_tags, keep_tags):
-            passage["text"] = _trim_buggy_sentences(passage["text"])
-            
-            tree = spans_to_tree(passage["text"], passage["spans"])
-            xml_string = etree.tostring(tree, encoding="unicode")
+            passage_text = _trim_buggy_sentences(passage["text"])
+
+            tree = spans_to_tree(passage_text, passage["spans"])
+            xml_string = _tree_to_xml_string(tree)
             xml_string = _collapse_whitespace(xml_string)
 
-            if return_xml:
-                results.append(xml_string)
-            else:
-                results.append(_strip_markup(xml_string))
+            if not xml_string:
+                continue
+
+            results.append(xml_string if return_xml else _strip_markup(xml_string))
 
     return results
