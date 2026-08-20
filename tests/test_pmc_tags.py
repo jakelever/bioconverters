@@ -5,9 +5,11 @@ class TestPmcTags:
     def test_ignore_tags(self):
         assert 'table' in PMC_IGNORE_TAGS
         assert 'table-wrap' in PMC_IGNORE_TAGS
-        assert 'xref' in PMC_IGNORE_TAGS
         assert 'ext-link' in PMC_IGNORE_TAGS
         assert 'graphic' in PMC_IGNORE_TAGS
+        # xref is no longer blanket-ignored - fig/table/section reference labels (e.g.
+        # "Table 1") need to survive so sentences referencing them stay grammatical
+        assert 'xref' not in PMC_IGNORE_TAGS
 
     def test_split_tags(self):
         assert 'p' in PMC_SPLIT_TAGS

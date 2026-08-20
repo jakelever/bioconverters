@@ -80,6 +80,51 @@ def _trim_buggy_sentences(text: str) -> str:
     return trimmed_text
 
 
+def _blank_parenthetical_xrefs(text: str, spans: list) -> tuple:
+    """
+    Blank out any "(...)" parenthetical whose entire content is a single xref span (e.g.
+    "(Table 1)"), parentheses included - the reference is dropped as unnecessary clutter
+    rather than left dangling for the reader. Only fires when the xref is immediately
+    adjacent (aside from whitespace) to both the opening and closing paren, so a mixed
+    parenthetical like "(see Table 1)" or a grouped one like "(Figure 7 and Table 3)" is
+    left untouched. Preserves length (spaces get collapsed later) so no span-offset
+    adjustment is needed for the remaining spans.
+    """
+    new_text = text
+    kept_spans = []
+
+    for start, length, tag, attrib in spans:
+        if tag != "xref":
+            kept_spans.append((start, length, tag, attrib))
+            continue
+
+        end = start + length
+
+        before_idx = start - 1
+        while before_idx >= 0 and text[before_idx].isspace():
+            before_idx -= 1
+
+        after_idx = end
+        while after_idx < len(text) and text[after_idx].isspace():
+            after_idx += 1
+
+        is_parenthetical = (
+            before_idx >= 0
+            and text[before_idx] == "("
+            and after_idx < len(text)
+            and text[after_idx] == ")"
+        )
+
+        if is_parenthetical:
+            blank_start, blank_end = before_idx, after_idx + 1
+            new_text = new_text[:blank_start] + " " * (blank_end - blank_start) + new_text[blank_end:]
+            continue
+
+        kept_spans.append((start, length, tag, attrib))
+
+    return new_text, kept_spans
+
+
 _TAG_RE = re.compile(r"<[^>]+>")
 
 
@@ -103,7 +148,13 @@ def _tree_to_xml_string(tree: etree.Element) -> str:
 
 
 def _extract_passages(
-    elements, ignore_tags, split_tags, keep_tags, return_xml, trim_buggy_sentences
+    elements,
+    ignore_tags,
+    split_tags,
+    keep_tags,
+    return_xml,
+    trim_buggy_sentences,
+    clean_xrefs_in_parentheses: bool = False,
 ):
     """
     Flatten a list of XML elements into cleaned-up passages, one string per passage. With
@@ -118,6 +169,8 @@ def _extract_passages(
         keep_tags: tags whose spans are preserved while building each passage
         return_xml: return marked-up XML strings if True, plain unescaped text if False
         trim_buggy_sentences: trim overly long, unbroken runs of text (see _trim_buggy_sentences)
+        clean_xrefs_in_parentheses: drop standalone "(<xref>...)" parentheticals entirely
+            (see _blank_parenthetical_xrefs)
     """
     if not isinstance(elements, list):
         elements = [elements]
@@ -126,6 +179,8 @@ def _extract_passages(
     for elem in elements:
         text, spans = tree_to_spans(elem)
         text = _cleanup_pmc_text(text)
+        if clean_xrefs_in_parentheses:
+            text, spans = _blank_parenthetical_xrefs(text, spans)
         for passage in spans_to_passages(text, spans, ignore_tags, split_tags, keep_tags):
             passage_text = passage["text"]
             if trim_buggy_sentences:

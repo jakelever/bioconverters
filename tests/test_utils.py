@@ -4,7 +4,11 @@ import xml.etree.ElementTree as etree
 import pytest
 
 from bioconverters.pmc_tags import PMC_IGNORE_TAGS, PMC_KEEP_TAGS, PMC_SPLIT_TAGS
-from bioconverters.utils import _extract_passages, _remove_brackets_without_words
+from bioconverters.utils import (
+    _blank_parenthetical_xrefs,
+    _extract_passages,
+    _remove_brackets_without_words,
+)
 
 
 @pytest.mark.parametrize(
@@ -173,7 +177,7 @@ def test_drops_extlink_supplementary_text():
     assert 'Annals of Oncology' not in text
 
 
-def test_drops_extlink_urls_and_citation_markers():
+def test_drops_extlink_urls_but_keeps_xref_text():
     xml = textwrap.dedent(
         '''\
     <?xml version="1.1" encoding="utf8" ?>
@@ -208,5 +212,58 @@ def test_drops_extlink_urls_and_citation_markers():
     assert len(passages) == 1
     text = passages[0]
     assert 'program PyMOL' in text
-    assert '[14]' not in text
     assert '//www.' not in text
+    # citation markers are no longer blanked at this level - xref is not blanket-ignored,
+    # so its text content survives here; dropping citation markers is now pmcxml.py's
+    # inject_citations feature (see test_pmcxml.py), not something _extract_passages does
+    # on its own
+    assert '[14]' in text
+
+
+def test_blank_parenthetical_xrefs_drops_standalone_reference():
+    text = 'The results are shown in (Table 1) below.'
+    start = text.index('Table 1')
+    spans = [(start, len('Table 1'), 'xref', {})]
+
+    new_text, kept_spans = _blank_parenthetical_xrefs(text, spans)
+
+    assert len(new_text) == len(text)
+    assert new_text == 'The results are shown in           below.'
+    assert kept_spans == []
+
+
+def test_blank_parenthetical_xrefs_keeps_mixed_prose():
+    text = 'The results are shown in (see Table 1) below.'
+    start = text.index('Table 1')
+    spans = [(start, len('Table 1'), 'xref', {})]
+
+    new_text, kept_spans = _blank_parenthetical_xrefs(text, spans)
+
+    assert new_text == text
+    assert kept_spans == spans
+
+
+def test_blank_parenthetical_xrefs_keeps_grouped_references():
+    text = 'See (Figure 7 and Table 3) for details.'
+    fig_start = text.index('Figure 7')
+    table_start = text.index('Table 3')
+    spans = [
+        (fig_start, len('Figure 7'), 'xref', {}),
+        (table_start, len('Table 3'), 'xref', {}),
+    ]
+
+    new_text, kept_spans = _blank_parenthetical_xrefs(text, spans)
+
+    assert new_text == text
+    assert kept_spans == spans
+
+
+def test_blank_parenthetical_xrefs_passes_through_non_xref_spans():
+    text = 'A (parenthetical) note.'
+    start = text.index('parenthetical')
+    spans = [(start, len('parenthetical'), 'italic', {})]
+
+    new_text, kept_spans = _blank_parenthetical_xrefs(text, spans)
+
+    assert new_text == text
+    assert kept_spans == spans

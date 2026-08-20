@@ -48,7 +48,14 @@ class PMCArticle(PmcMeta):
 _CITATION_TAG = "citation"
 
 
-def _extract_pmc_passages(elements, keep_tags, return_xml, trim_buggy_sentences, inject_citations):
+def _extract_pmc_passages(
+    elements,
+    keep_tags,
+    return_xml,
+    trim_buggy_sentences,
+    inject_citations,
+    clean_xrefs_in_parentheses,
+):
     effective_keep_tags = keep_tags | {_CITATION_TAG} if inject_citations else keep_tags
     return _extract_passages(
         elements,
@@ -57,6 +64,7 @@ def _extract_pmc_passages(elements, keep_tags, return_xml, trim_buggy_sentences,
         effective_keep_tags,
         return_xml,
         trim_buggy_sentences,
+        clean_xrefs_in_parentheses,
     )
 
 
@@ -125,7 +133,12 @@ def _assign_subsections(text_sources: TextSource) -> None:
 
 
 def _extract_article_content(
-    article_elem: etree.Element, keep_tags, return_xml, trim_buggy_sentences, inject_citations
+    article_elem: etree.Element,
+    keep_tags,
+    return_xml,
+    trim_buggy_sentences,
+    inject_citations,
+    clean_xrefs_in_parentheses,
 ) -> TextSource:
     """
     Given the XML element representing the top-level of the scientific article, extract all the text sources
@@ -142,13 +155,23 @@ def _extract_article_content(
     title_text = [
         {"text": _remove_brackets_from_titles(t)}
         for t in _extract_pmc_passages(
-            title, keep_tags, return_xml, trim_buggy_sentences, inject_citations
+            title,
+            keep_tags,
+            return_xml,
+            trim_buggy_sentences,
+            inject_citations,
+            clean_xrefs_in_parentheses,
         )
     ]
     subtitle_text = [
         {"text": _remove_brackets_from_titles(t)}
         for t in _extract_pmc_passages(
-            subtitle, keep_tags, return_xml, trim_buggy_sentences, inject_citations
+            subtitle,
+            keep_tags,
+            return_xml,
+            trim_buggy_sentences,
+            inject_citations,
+            clean_xrefs_in_parentheses,
         )
     ]
 
@@ -163,7 +186,12 @@ def _extract_article_content(
         "abstract": [
             {"text": t}
             for t in _extract_pmc_passages(
-                abstract, keep_tags, return_xml, trim_buggy_sentences, inject_citations
+                abstract,
+                keep_tags,
+                return_xml,
+                trim_buggy_sentences,
+                inject_citations,
+                clean_xrefs_in_parentheses,
             )
         ],
         # Extract the full text from the paper as well as supplementaries and floating blocks of text
@@ -175,6 +203,7 @@ def _extract_article_content(
                 return_xml,
                 trim_buggy_sentences,
                 inject_citations,
+                clean_xrefs_in_parentheses,
             )
         ],
         "back": [
@@ -185,6 +214,7 @@ def _extract_article_content(
                 return_xml,
                 trim_buggy_sentences,
                 inject_citations,
+                clean_xrefs_in_parentheses,
             )
         ],
         "floating": [
@@ -195,6 +225,7 @@ def _extract_article_content(
                 return_xml,
                 trim_buggy_sentences,
                 inject_citations,
+                clean_xrefs_in_parentheses,
             )
         ],
     }
@@ -269,7 +300,12 @@ def _get_meta_info_for_pmc_article(article_elem) -> PmcMeta:
     assert len(journal) <= 1
     journal_text = " ".join(
         _extract_pmc_passages(
-            journal, set(), return_xml=False, trim_buggy_sentences=True, inject_citations=False
+            journal,
+            set(),
+            return_xml=False,
+            trim_buggy_sentences=True,
+            inject_citations=False,
+            clean_xrefs_in_parentheses=False,
         )
     )
 
@@ -323,6 +359,7 @@ def parse_pmcxml(
     return_xml: bool = True,
     trim_buggy_sentences: bool = True,
     inject_citations: bool = True,
+    clean_xrefs_in_parentheses: bool = True,
 ) -> Iterable[PMCArticle]:
     """
     Parse a PMC XML file into a series of PMCArticle dicts (one per article/sub-article).
@@ -342,6 +379,12 @@ def parse_pmcxml(
             being dropped like other ignored tags - this affects return_xml=False output
             too, since the citation marker text is no longer blanked (though the injected
             attributes themselves don't survive being stripped down to plain text).
+        clean_xrefs_in_parentheses: drop a "(...)" parenthetical entirely, parentheses
+            included, when its whole content is a single non-citation cross-reference (e.g.
+            "(Table 1)", "(Fig. 2)") - avoids dangling text like "shown in ." left behind by
+            an otherwise-blanked xref. Only fires when the xref fills the parentheses on its
+            own; mixed ("(see Table 1)") or grouped ("(Figure 7 and Table 3)") parentheticals
+            are left untouched.
     """
     source = _apply_pmc_xlink_fix(source)
 
@@ -379,7 +422,12 @@ def parse_pmcxml(
                         sub_meta["journal_iso"] = meta["journal_iso"]
 
                 text_sources = _extract_article_content(
-                    article_elem, keep_tags, return_xml, trim_buggy_sentences, inject_citations
+                    article_elem,
+                    keep_tags,
+                    return_xml,
+                    trim_buggy_sentences,
+                    inject_citations,
+                    clean_xrefs_in_parentheses,
                 )
 
                 yield PMCArticle({**sub_meta, "text_sources": text_sources})

@@ -12,7 +12,6 @@ PMC_IGNORE_TAGS = {
 	"mml:math",
 	"object-id",
 	"ext-link",
-	"xref",
 }
 
 PMC_SPLIT_TAGS = {

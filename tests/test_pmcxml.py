@@ -68,9 +68,11 @@ def test_inject_citations_adds_pmid_doi_attributes():
     assert 'pmid="222|333"' in text
     assert '>2,3</citation>' in text
 
-    # non-bibr xrefs (e.g. figure references) are unaffected - still dropped as before
+    # non-bibr xrefs (e.g. figure references) are unaffected by citation injection - they
+    # stay plain "xref" (never retagged to <citation>), and their text content (e.g. "Figure
+    # 1") now survives as readable plain text since xref is no longer blanket-ignored
     assert 'ref-type="fig"' not in text
-    assert 'Figure 1' not in text
+    assert 'Figure 1' in text
 
     # xref never survives as such - either retagged to <citation> or dropped
     assert '<xref' not in text
@@ -117,3 +119,28 @@ def test_inject_citations_resolves_against_parent_ref_list_for_subarticles():
     text = ' '.join(p['text'] for p in sub_doc['text_sources']['article'])
     assert 'pmid="111"' in text
     assert '>1</citation>' in text
+
+
+_PARENTHETICAL_XREF_XML = '''<article>
+    <front><article-meta><article-id pub-id-type="pmid">1</article-id></article-meta></front>
+    <body><p>Expression levels are shown in (<xref ref-type="fig" rid="f1">Table 3</xref>) below. See Table 3, third row, for details.</p></body>
+</article>'''
+
+
+def test_clean_xrefs_in_parentheses_default_drops_standalone_reference():
+    docs = list(parse_pmcxml(StringIO(_PARENTHETICAL_XREF_XML), inject_citations=False))
+    text = ' '.join(p['text'] for p in docs[0]['text_sources']['article'])
+    assert 'shown in below' in text
+    assert 'third row' in text  # unrelated plain-text mention still survives
+
+
+def test_clean_xrefs_in_parentheses_false_keeps_dangling_reference():
+    docs = list(
+        parse_pmcxml(
+            StringIO(_PARENTHETICAL_XREF_XML),
+            inject_citations=False,
+            clean_xrefs_in_parentheses=False,
+        )
+    )
+    text = ' '.join(p['text'] for p in docs[0]['text_sources']['article'])
+    assert 'shown in (Table 3) below' in text
