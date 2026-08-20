@@ -59,27 +59,28 @@ def test_inject_citations_adds_pmid_doi_attributes():
     docs = list(parse_pmcxml(StringIO(_CITATION_XML)))
     text = ' '.join(p['text'] for p in docs[0]['text_sources']['article'])
 
-    # single-rid citation gets its pmid/doi attributes
+    # single-rid citation gets retagged to <citation> with its pmid/doi attributes
     assert 'pmid="111"' in text
     assert 'doi="10.1/one"' in text
-    assert '>1</xref>' in text
+    assert '>1</citation>' in text
 
     # multi-rid (grouped) citation merges values from each referenced ref, "|"-joined
     assert 'pmid="222|333"' in text
-    assert '>2,3</xref>' in text
+    assert '>2,3</citation>' in text
 
     # non-bibr xrefs (e.g. figure references) are unaffected - still dropped as before
     assert 'ref-type="fig"' not in text
     assert 'Figure 1' not in text
 
-    # the internal placeholder tag never leaks into output
-    assert 'citation-ref' not in text
+    # xref never survives as such - either retagged to <citation> or dropped
+    assert '<xref' not in text
 
 
 def test_inject_citations_false_drops_citations_like_before():
     docs = list(parse_pmcxml(StringIO(_CITATION_XML), inject_citations=False))
     text = ' '.join(p['text'] for p in docs[0]['text_sources']['article'])
     assert '<xref' not in text
+    assert '<citation' not in text
     assert 'pmid=' not in text
 
 
@@ -89,4 +90,30 @@ def test_inject_citations_has_no_effect_on_pmcxml2bioc():
     docs = list(pmcxml2bioc(StringIO(_CITATION_XML)))
     text = ' '.join(p.text for doc in docs for p in doc.passages)
     assert '<xref' not in text
+    assert '<citation' not in text
     assert 'pmid=' not in text
+
+
+_SUBARTICLE_CITATION_XML = '''<article>
+    <front><article-meta><article-id pub-id-type="pmid">1</article-id></article-meta></front>
+    <body><p>Main finding.</p></body>
+    <back><ref-list>
+        <ref id="r1"><element-citation><pub-id pub-id-type="pmid">111</pub-id></element-citation></ref>
+    </ref-list></back>
+    <sub-article>
+        <front-stub><article-id pub-id-type="pmid">2</article-id></front-stub>
+        <body><p>Sub-article finding <xref ref-type="bibr" rid="r1">1</xref>.</p></body>
+    </sub-article>
+</article>'''
+
+
+def test_inject_citations_resolves_against_parent_ref_list_for_subarticles():
+    # sub-articles typically don't carry their own <ref-list> and cite the parent's -
+    # injection runs once on the whole document, so this should still resolve correctly
+    docs = list(parse_pmcxml(StringIO(_SUBARTICLE_CITATION_XML)))
+    assert len(docs) == 2
+    sub_doc = docs[1]
+    assert sub_doc['pmid'] == '2'
+    text = ' '.join(p['text'] for p in sub_doc['text_sources']['article'])
+    assert 'pmid="111"' in text
+    assert '>1</citation>' in text

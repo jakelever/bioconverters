@@ -45,12 +45,12 @@ class PMCArticle(PmcMeta):
     text_sources: TextSource
 
 
-_CITATION_TAG = "citation-ref"
+_CITATION_TAG = "citation"
 
 
 def _extract_pmc_passages(elements, keep_tags, return_xml, trim_buggy_sentences, inject_citations):
     effective_keep_tags = keep_tags | {_CITATION_TAG} if inject_citations else keep_tags
-    results = _extract_passages(
+    return _extract_passages(
         elements,
         PMC_IGNORE_TAGS,
         PMC_SPLIT_TAGS,
@@ -58,9 +58,6 @@ def _extract_pmc_passages(elements, keep_tags, return_xml, trim_buggy_sentences,
         return_xml,
         trim_buggy_sentences,
     )
-    if inject_citations:
-        results = [_restore_citation_tag(r) for r in results]
-    return results
 
 
 def _build_citation_lookup(article_elem):
@@ -86,12 +83,16 @@ def _build_citation_lookup(article_elem):
 def _inject_citations(article_elem, citation_lookup) -> None:
     """
     For every in-text <xref ref-type="bibr"> citation, look up its pub-id values (e.g.
-    pmid, doi) by rid and set them as attributes directly on the xref element. Handles
-    xrefs referencing multiple ids (space-separated rid, e.g. a grouped "[1,2,3]" citation)
-    by joining multiple found values for the same pub-id-type with "|". Retags matching
-    elements to a private placeholder tag so they can be selectively kept (with their now-
-    enriched attributes, restored back to "xref" once serialized) separately from other
-    xref types (e.g. figure/table references), which stay dropped as before.
+    pmid, doi) by rid and set them as attributes directly on the element. Handles xrefs
+    referencing multiple ids (space-separated rid, e.g. a grouped "[1,2,3]" citation) by
+    joining multiple found values for the same pub-id-type with "|". Retags matching
+    elements to "citation" (from "xref") so they can be selectively kept - with their now-
+    enriched attributes - separately from other xref types (e.g. figure/table references),
+    which stay dropped as before.
+
+    Call this once, on the whole top-level <article> element, before any per-section
+    extraction - sub-articles typically don't have their own <ref-list> and rely on the
+    parent's, so scoping this per sub-article would leave their citations unresolved.
     """
     for xref in article_elem.iter("xref"):
         if xref.attrib.get("ref-type") != "bibr":
@@ -104,10 +105,6 @@ def _inject_citations(article_elem, citation_lookup) -> None:
         for pub_id_type, values in merged.items():
             xref.set(pub_id_type, "|".join(values))
         xref.tag = _CITATION_TAG
-
-
-def _restore_citation_tag(xml_string: str) -> str:
-    return xml_string.replace(f"<{_CITATION_TAG}", "<xref").replace(f"</{_CITATION_TAG}>", "</xref>")
 
 
 def _assign_subsections(text_sources: TextSource) -> None:
@@ -133,10 +130,6 @@ def _extract_article_content(
     """
     Given the XML element representing the top-level of the scientific article, extract all the text sources
     """
-    if inject_citations:
-        citation_lookup = _build_citation_lookup(article_elem)
-        _inject_citations(article_elem, citation_lookup)
-
     # Extract the title and subtitle of the paper
     title = article_elem.findall(
         "./front/article-meta/title-group/article-title"
@@ -343,18 +336,22 @@ def parse_pmcxml(
         trim_buggy_sentences: trim overly long, unbroken runs of text to a maximum length,
             to avoid issues with buggy sentences in some PMC articles.
         inject_citations: for each in-text <xref ref-type="bibr"> citation, look up its
-            referenced <ref>'s pub-id values (e.g. pmid, doi) and add them as attributes on
-            the xref tag, e.g. <xref pmid="12345678">1</xref>. Citation xrefs are then kept
-            in the output (with the citation marker text visible) instead of being dropped
-            like other ignored tags - this affects return_xml=False output too, since the
-            citation marker text is no longer blanked (though the injected attributes
-            themselves don't survive being stripped down to plain text).
+            referenced <ref>'s pub-id values (e.g. pmid, doi) and add them as attributes,
+            retagged to <citation>, e.g. <citation pmid="12345678">1</citation>. These are
+            then kept in the output (with the citation marker text visible) instead of
+            being dropped like other ignored tags - this affects return_xml=False output
+            too, since the citation marker text is no longer blanked (though the injected
+            attributes themselves don't survive being stripped down to plain text).
     """
     source = _apply_pmc_xlink_fix(source)
 
     # Skip to the article element in the file
     for event, elem in etree.iterparse(source, events=("start", "end", "start-ns", "end-ns")):
         if event == "end" and elem.tag == "article":
+            if inject_citations:
+                citation_lookup = _build_citation_lookup(elem)
+                _inject_citations(elem, citation_lookup)
+
             meta = _get_meta_info_for_pmc_article(elem)
 
             # We're going to process the main article along with any subarticles
