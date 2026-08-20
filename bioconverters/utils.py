@@ -102,7 +102,9 @@ def _tree_to_xml_string(tree: etree.Element) -> str:
     return inner
 
 
-def _extract_passages(elements, ignore_tags, split_tags, keep_tags, return_xml):
+def _extract_passages(
+    elements, ignore_tags, split_tags, keep_tags, return_xml, trim_buggy_sentences
+):
     """
     Flatten a list of XML elements into cleaned-up passages, one string per passage. With
     return_xml=True, any keep_tags spans are preserved as inline markup (e.g. "some
@@ -115,6 +117,7 @@ def _extract_passages(elements, ignore_tags, split_tags, keep_tags, return_xml):
         split_tags: tags that create passage boundaries
         keep_tags: tags whose spans are preserved while building each passage
         return_xml: return marked-up XML strings if True, plain unescaped text if False
+        trim_buggy_sentences: trim overly long, unbroken runs of text (see _trim_buggy_sentences)
     """
     if not isinstance(elements, list):
         elements = [elements]
@@ -124,7 +127,9 @@ def _extract_passages(elements, ignore_tags, split_tags, keep_tags, return_xml):
         text, spans = tree_to_spans(elem)
         text = _cleanup_pmc_text(text)
         for passage in spans_to_passages(text, spans, ignore_tags, split_tags, keep_tags):
-            passage_text = _trim_buggy_sentences(passage["text"])
+            passage_text = passage["text"]
+            if trim_buggy_sentences:
+                passage_text = _trim_buggy_sentences(passage_text)
 
             tree = spans_to_tree(passage_text, passage["spans"])
             xml_string = _tree_to_xml_string(tree)

@@ -287,7 +287,12 @@ def parse_pubmedxml(
             # Extract the title of paper
             title = elem.findall("./MedlineCitation/Article/ArticleTitle")
             title_passages = _extract_passages(
-                title, PUBMED_IGNORE_TAGS, PUBMED_SPLIT_TAGS, PUBMED_KEEP_TAGS, return_xml=False
+                title,
+                PUBMED_IGNORE_TAGS,
+                PUBMED_SPLIT_TAGS,
+                PUBMED_KEEP_TAGS,
+                return_xml=False,
+                trim_buggy_sentences=True,
             )
             title_text = [_remove_brackets_from_titles(t) for t in title_passages]
             title_text = [html.unescape(t) for t in title_text]
@@ -296,7 +301,12 @@ def parse_pubmedxml(
             # Extract the abstract from the paper
             abstract = elem.findall("./MedlineCitation/Article/Abstract/AbstractText")
             abstract_passages = _extract_passages(
-                abstract, PUBMED_IGNORE_TAGS, PUBMED_SPLIT_TAGS, PUBMED_KEEP_TAGS, return_xml=False
+                abstract,
+                PUBMED_IGNORE_TAGS,
+                PUBMED_SPLIT_TAGS,
+                PUBMED_KEEP_TAGS,
+                return_xml=False,
+                trim_buggy_sentences=True,
             )
             abstract_text = [html.unescape(t) for t in abstract_passages]
             abstract_text = [_remove_brackets_without_words(t) for t in abstract_text]

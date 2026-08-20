@@ -28,7 +28,12 @@ def test_remove_brackets_without_words(test_input, expected):
 def test_extract_figure_label():
     xml_input = '<article><fig id="pone-0026760-g003" position="float"><object-id pub-id-type="doi">10.1371/journal.pone.0026760.g003</object-id><label>Figure 3</label><caption><title>Anchorage-independent growth of ERBB2 mutants.</title></caption><graphic/></fig></article>'
     passages = _extract_passages(
-        [etree.fromstring(xml_input)], PMC_IGNORE_TAGS, PMC_SPLIT_TAGS, PMC_KEEP_TAGS, return_xml=True
+        [etree.fromstring(xml_input)],
+        PMC_IGNORE_TAGS,
+        PMC_SPLIT_TAGS,
+        PMC_KEEP_TAGS,
+        return_xml=True,
+        trim_buggy_sentences=True,
     )
     assert 'Figure 3' in passages
     # the object-id (doi) is an ignore_tag, so its content shouldn't survive
@@ -38,7 +43,12 @@ def test_extract_figure_label():
 def test_extract_title_with_italics():
     xml = '<article><article-title>Activating mutations in <italic>ALK</italic> provide a therapeutic target in neuroblastoma</article-title></article>'
     passages = _extract_passages(
-        [etree.fromstring(xml)], PMC_IGNORE_TAGS, PMC_SPLIT_TAGS, PMC_KEEP_TAGS, return_xml=True
+        [etree.fromstring(xml)],
+        PMC_IGNORE_TAGS,
+        PMC_SPLIT_TAGS,
+        PMC_KEEP_TAGS,
+        return_xml=True,
+        trim_buggy_sentences=True,
     )
     assert len(passages) == 1
     # italic is a keep_tag, so ALK should come through as inline markup in the XML string
@@ -51,7 +61,12 @@ def test_extract_title_with_italics():
 def test_extract_title_without_keep_tags():
     xml = '<article><article-title>Activating mutations in <italic>ALK</italic> provide a therapeutic target in neuroblastoma</article-title></article>'
     passages = _extract_passages(
-        [etree.fromstring(xml)], PMC_IGNORE_TAGS, PMC_SPLIT_TAGS, set(), return_xml=True
+        [etree.fromstring(xml)],
+        PMC_IGNORE_TAGS,
+        PMC_SPLIT_TAGS,
+        set(),
+        return_xml=True,
+        trim_buggy_sentences=True,
     )
     assert len(passages) == 1
     # with keep_tags empty, the result is just plain text - no markup at all
@@ -64,7 +79,12 @@ def test_extract_title_without_keep_tags():
 def test_extract_title_return_xml_false_strips_markup():
     xml = '<article><article-title>Activating mutations in <italic>ALK</italic> provide a therapeutic target in neuroblastoma</article-title></article>'
     passages = _extract_passages(
-        [etree.fromstring(xml)], PMC_IGNORE_TAGS, PMC_SPLIT_TAGS, PMC_KEEP_TAGS, return_xml=False
+        [etree.fromstring(xml)],
+        PMC_IGNORE_TAGS,
+        PMC_SPLIT_TAGS,
+        PMC_KEEP_TAGS,
+        return_xml=False,
+        trim_buggy_sentences=True,
     )
     assert len(passages) == 1
     # return_xml=False strips markup even though italic is a keep_tag
@@ -77,7 +97,12 @@ def test_extract_title_return_xml_false_strips_markup():
 def test_return_xml_true_keeps_valid_xml_escaping():
     xml = '<article><p>Coffee &amp; Tea, P&lt;0.05</p></article>'
     passages = _extract_passages(
-        [etree.fromstring(xml)], PMC_IGNORE_TAGS, PMC_SPLIT_TAGS, PMC_KEEP_TAGS, return_xml=True
+        [etree.fromstring(xml)],
+        PMC_IGNORE_TAGS,
+        PMC_SPLIT_TAGS,
+        PMC_KEEP_TAGS,
+        return_xml=True,
+        trim_buggy_sentences=True,
     )
     assert len(passages) == 1
     # special characters stay properly XML-escaped
@@ -87,11 +112,39 @@ def test_return_xml_true_keeps_valid_xml_escaping():
 def test_return_xml_false_unescapes_entities():
     xml = '<article><p>Coffee &amp; Tea, P&lt;0.05</p></article>'
     passages = _extract_passages(
-        [etree.fromstring(xml)], PMC_IGNORE_TAGS, PMC_SPLIT_TAGS, PMC_KEEP_TAGS, return_xml=False
+        [etree.fromstring(xml)],
+        PMC_IGNORE_TAGS,
+        PMC_SPLIT_TAGS,
+        PMC_KEEP_TAGS,
+        return_xml=False,
+        trim_buggy_sentences=True,
     )
     assert len(passages) == 1
     # entities get decoded back to their literal characters
     assert passages[0] == 'Coffee & Tea, P<0.05'
+
+
+def test_trim_buggy_sentences_false_leaves_long_runs_untouched():
+    long_run = "x" * 100000
+    xml = f'<article><p>{long_run}</p></article>'
+    trimmed = _extract_passages(
+        [etree.fromstring(xml)],
+        PMC_IGNORE_TAGS,
+        PMC_SPLIT_TAGS,
+        PMC_KEEP_TAGS,
+        return_xml=False,
+        trim_buggy_sentences=True,
+    )
+    untrimmed = _extract_passages(
+        [etree.fromstring(xml)],
+        PMC_IGNORE_TAGS,
+        PMC_SPLIT_TAGS,
+        PMC_KEEP_TAGS,
+        return_xml=False,
+        trim_buggy_sentences=False,
+    )
+    assert len(trimmed[0]) < 100000
+    assert len(untrimmed[0]) == 100000
 
 
 def test_drops_extlink_supplementary_text():
@@ -108,7 +161,12 @@ def test_drops_extlink_supplementary_text():
         </article>'''
     )
     passages = _extract_passages(
-        [etree.fromstring(xml)], PMC_IGNORE_TAGS, PMC_SPLIT_TAGS, PMC_KEEP_TAGS, return_xml=True
+        [etree.fromstring(xml)],
+        PMC_IGNORE_TAGS,
+        PMC_SPLIT_TAGS,
+        PMC_KEEP_TAGS,
+        return_xml=True,
+        trim_buggy_sentences=True,
     )
     text = ' '.join(passages)
     assert 'supplementary Figure S4C' not in text
@@ -140,7 +198,12 @@ def test_drops_extlink_urls_and_citation_markers():
     </article>'''
     )
     passages = _extract_passages(
-        [etree.fromstring(xml)], PMC_IGNORE_TAGS, PMC_SPLIT_TAGS, PMC_KEEP_TAGS, return_xml=True
+        [etree.fromstring(xml)],
+        PMC_IGNORE_TAGS,
+        PMC_SPLIT_TAGS,
+        PMC_KEEP_TAGS,
+        return_xml=True,
+        trim_buggy_sentences=True,
     )
     assert len(passages) == 1
     text = passages[0]

@@ -45,8 +45,10 @@ class PMCArticle(PmcMeta):
     text_sources: TextSource
 
 
-def _extract_pmc_passages(elements, keep_tags, return_xml):
-    return _extract_passages(elements, PMC_IGNORE_TAGS, PMC_SPLIT_TAGS, keep_tags, return_xml)
+def _extract_pmc_passages(elements, keep_tags, return_xml, trim_buggy_sentences):
+    return _extract_passages(
+        elements, PMC_IGNORE_TAGS, PMC_SPLIT_TAGS, keep_tags, return_xml, trim_buggy_sentences
+    )
 
 
 def _assign_subsections(text_sources: TextSource) -> None:
@@ -66,7 +68,9 @@ def _assign_subsections(text_sources: TextSource) -> None:
             passage["subsection"] = subsection
 
 
-def _extract_article_content(article_elem: etree.Element, keep_tags, return_xml) -> TextSource:
+def _extract_article_content(
+    article_elem: etree.Element, keep_tags, return_xml, trim_buggy_sentences
+) -> TextSource:
     """
     Given the XML element representing the top-level of the scientific article, extract all the text sources
     """
@@ -81,11 +85,11 @@ def _extract_article_content(article_elem: etree.Element, keep_tags, return_xml)
 
     title_text = [
         {"text": _remove_brackets_from_titles(t)}
-        for t in _extract_pmc_passages(title, keep_tags, return_xml)
+        for t in _extract_pmc_passages(title, keep_tags, return_xml, trim_buggy_sentences)
     ]
     subtitle_text = [
         {"text": _remove_brackets_from_titles(t)}
-        for t in _extract_pmc_passages(subtitle, keep_tags, return_xml)
+        for t in _extract_pmc_passages(subtitle, keep_tags, return_xml, trim_buggy_sentences)
     ]
 
     # Extract the abstract from the paper
@@ -96,20 +100,27 @@ def _extract_article_content(article_elem: etree.Element, keep_tags, return_xml)
     text_sources: TextSource = {
         "title": title_text,
         "subtitle": subtitle_text,
-        "abstract": [{"text": t} for t in _extract_pmc_passages(abstract, keep_tags, return_xml)],
+        "abstract": [
+            {"text": t}
+            for t in _extract_pmc_passages(abstract, keep_tags, return_xml, trim_buggy_sentences)
+        ],
         # Extract the full text from the paper as well as supplementaries and floating blocks of text
         "article": [
             {"text": t}
-            for t in _extract_pmc_passages(article_elem.findall("./body"), keep_tags, return_xml)
+            for t in _extract_pmc_passages(
+                article_elem.findall("./body"), keep_tags, return_xml, trim_buggy_sentences
+            )
         ],
         "back": [
             {"text": t}
-            for t in _extract_pmc_passages(article_elem.findall("./back"), keep_tags, return_xml)
+            for t in _extract_pmc_passages(
+                article_elem.findall("./back"), keep_tags, return_xml, trim_buggy_sentences
+            )
         ],
         "floating": [
             {"text": t}
             for t in _extract_pmc_passages(
-                article_elem.findall("./floats-group"), keep_tags, return_xml
+                article_elem.findall("./floats-group"), keep_tags, return_xml, trim_buggy_sentences
             )
         ],
     }
@@ -182,7 +193,9 @@ def _get_meta_info_for_pmc_article(article_elem) -> PmcMeta:
         + article_elem.findall("./front-stub/journal-title-group/journal-title")
     )
     assert len(journal) <= 1
-    journal_text = " ".join(_extract_pmc_passages(journal, set(), return_xml=False))
+    journal_text = " ".join(
+        _extract_pmc_passages(journal, set(), return_xml=False, trim_buggy_sentences=True)
+    )
 
     journal_iso_text = ""
     journal_iso = article_elem.findall("./front/journal-meta/journal-id") + article_elem.findall(
@@ -232,6 +245,7 @@ def parse_pmcxml(
     source: Union[str, TextIO],
     keep_tags=PMC_KEEP_TAGS,
     return_xml: bool = True,
+    trim_buggy_sentences: bool = True,
 ) -> Iterable[PMCArticle]:
     """
     Parse a PMC XML file into a series of PMCArticle dicts (one per article/sub-article).
@@ -242,6 +256,8 @@ def parse_pmcxml(
             "italic") - pass an empty set for plain text with no markup.
         return_xml: return each passage's text as a marked-up XML string if True (default),
             or as plain, unescaped text with any markup stripped if False.
+        trim_buggy_sentences: trim overly long, unbroken runs of text to a maximum length,
+            to avoid issues with buggy sentences in some PMC articles.
     """
     source = _apply_pmc_xlink_fix(source)
 
@@ -274,7 +290,9 @@ def parse_pmcxml(
                         sub_meta["journal"] = meta["journal"]
                         sub_meta["journal_iso"] = meta["journal_iso"]
 
-                text_sources = _extract_article_content(article_elem, keep_tags, return_xml)
+                text_sources = _extract_article_content(
+                    article_elem, keep_tags, return_xml, trim_buggy_sentences
+                )
 
                 yield PMCArticle({**sub_meta, "text_sources": text_sources})
 
