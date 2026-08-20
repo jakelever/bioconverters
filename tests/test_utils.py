@@ -1,5 +1,5 @@
 import textwrap
-import xml.etree.cElementTree as etree
+import xml.etree.ElementTree as etree
 
 import pytest
 

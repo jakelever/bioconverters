@@ -1,7 +1,7 @@
 import calendar
 import html
 import re
-import xml.etree.cElementTree as etree
+import xml.etree.ElementTree as etree
 from typing import Iterable, Optional, TextIO, Tuple, Union
 
 try:
@@ -15,8 +15,8 @@ import bioc
 from .pubmed_tags import PUBMED_IGNORE_TAGS, PUBMED_KEEP_TAGS, PUBMED_SPLIT_TAGS
 from .utils import (
     extract_passages,
-    remove_brackets_without_words,
     remove_brackets_from_titles,
+    remove_brackets_without_words,
     trim_sentence_lengths,
 )
 

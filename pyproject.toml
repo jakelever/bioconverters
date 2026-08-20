@@ -27,9 +27,18 @@ dependencies = ["bioc>=2.0", "typing_extensions", "spans_and_trees>=0.3.0,<0.4"]
 
 [project.optional-dependencies]
 test = ["pytest", "pytest-cov", "requests"]
+lint = ["ruff"]
 
 [project.urls]
 Homepage = "https://github.com/jakelever/bioconverters"
 
 [tool.setuptools]
 packages = ["bioconverters"]
+
+[tool.ruff]
+indent-width = 4
+target-version = "py37"
+line-length = 220
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP"]
