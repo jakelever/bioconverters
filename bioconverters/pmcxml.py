@@ -15,54 +15,8 @@ from collections import OrderedDict
 
 import bioc
 
-from .pmc_tags import PMC_IGNORE_TAGS, PMC_KEEP_TAGS, PMC_SPLIT_TAGS
+from .pmc_tags import PMC_ALLOWED_SUBSECTIONS, PMC_IGNORE_TAGS, PMC_KEEP_TAGS, PMC_SPLIT_TAGS
 from .utils import extract_passages, remove_brackets_from_titles, trim_sentence_lengths
-
-allowed_subsections = {
-    "abbreviations",
-    "additional information",
-    "analysis",
-    "author contributions",
-    "authors' contributions",
-    "authors’ contributions",
-    "background",
-    "case report",
-    "competing interests",
-    "conclusion",
-    "conclusions",
-    "conflict of interest",
-    "conflicts of interest",
-    "consent",
-    "data analysis",
-    "data collection",
-    "discussion",
-    "ethics statement",
-    "funding",
-    "introduction",
-    "limitations",
-    "material and methods",
-    "materials",
-    "materials and methods",
-    "measures",
-    "method",
-    "methods",
-    "participants",
-    "patients and methods",
-    "pre-publication history",
-    "related literature",
-    "results",
-    "results and discussion",
-    "statistical analyses",
-    "statistical analysis",
-    "statistical methods",
-    "statistics",
-    "study design",
-    "summary",
-    "supplementary data",
-    "supplementary information",
-    "supplementary material",
-    "supporting information",
-}
 
 
 class TextSource(TypedDict):
@@ -389,7 +343,7 @@ def pmcxml2bioc(
                     passage = bioc.BioCPassage()
 
                     subsection_check = text_source.lower().strip("01234567890. ")
-                    if subsection_check in allowed_subsections:
+                    if subsection_check in PMC_ALLOWED_SUBSECTIONS:
                         subsection = subsection_check
 
                     passage.infons["section"] = group_name
