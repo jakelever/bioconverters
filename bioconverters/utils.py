@@ -81,15 +81,24 @@ def _trim_buggy_sentences(text: str) -> str:
     return trimmed_text
 
 
-def _blank_parenthetical_xrefs(text: str, spans: list) -> tuple:
+def _blank_bracketed_xrefs(text: str, spans: list) -> tuple:
     """
-    Blank out any "(...)" parenthetical whose entire content is a single xref span (e.g.
-    "(Table 1)"), parentheses included - the reference is dropped as unnecessary clutter
-    rather than left dangling for the reader. Only fires when the xref is immediately
-    adjacent (aside from whitespace) to both the opening and closing paren, so a mixed
-    parenthetical like "(see Table 1)" or a grouped one like "(Figure 7 and Table 3)" is
-    left untouched. Preserves length (spaces get collapsed later) so no span-offset
-    adjustment is needed for the remaining spans.
+    Blank out xref content that reads as clutter once left in plain text, two ways:
+
+    1. An xref whose own content is already wrapped in square brackets (e.g. "[1]",
+       "[1,2]") is blanked outright, brackets included - determined purely from the
+       xref's own text, no surrounding context needed, since a bracketed marker like
+       this reads fine dropped from a sentence as-is (e.g. "shown previously [1]." ->
+       "shown previously.").
+    2. An xref immediately wrapped in "(...)" with nothing else inside the parentheses
+       (e.g. "(Table 1)") has the whole "(...)" blanked, parens included - the reference
+       is dropped as unnecessary clutter rather than left dangling for the reader. Only
+       fires when the xref is immediately adjacent (aside from whitespace) to both the
+       opening and closing paren, so a mixed parenthetical like "(see Table 1)" or a
+       grouped one like "(Figure 7 and Table 3)" is left untouched.
+
+    Preserves length (spaces get collapsed later) so no span-offset adjustment is needed
+    for the remaining spans.
     """
     new_text = text
     kept_spans = []
@@ -100,6 +109,11 @@ def _blank_parenthetical_xrefs(text: str, spans: list) -> tuple:
             continue
 
         end = start + length
+        xref_text = text[start:end].strip()
+
+        if xref_text.startswith("[") and xref_text.endswith("]"):
+            new_text = new_text[:start] + " " * length + new_text[end:]
+            continue
 
         before_idx = start - 1
         while before_idx >= 0 and text[before_idx].isspace():
@@ -163,7 +177,7 @@ def _extract_passages(
     keep_tags,
     return_xml,
     trim_buggy_sentences,
-    clean_xrefs_in_parentheses: bool = False,
+    clean_xrefs_in_brackets: bool = False,
 ):
     """
     Flatten a list of XML elements into cleaned-up passages, one string per passage. With
@@ -178,8 +192,8 @@ def _extract_passages(
         keep_tags: tags whose spans are preserved while building each passage
         return_xml: return marked-up XML strings if True, plain unescaped text if False
         trim_buggy_sentences: trim overly long, unbroken runs of text (see _trim_buggy_sentences)
-        clean_xrefs_in_parentheses: drop standalone "(<xref>...)" parentheticals entirely
-            (see _blank_parenthetical_xrefs)
+        clean_xrefs_in_brackets: drop xref content that's either wrapped in "[...]" itself,
+            or the sole content of a surrounding "(...)" (see _blank_bracketed_xrefs)
     """
     if not isinstance(elements, list):
         elements = [elements]
@@ -188,8 +202,8 @@ def _extract_passages(
     for elem in elements:
         text, spans = tree_to_spans(elem)
         text = _cleanup_pmc_text(text)
-        if clean_xrefs_in_parentheses:
-            text, spans = _blank_parenthetical_xrefs(text, spans)
+        if clean_xrefs_in_brackets:
+            text, spans = _blank_bracketed_xrefs(text, spans)
         for passage in spans_to_passages(text, spans, ignore_tags, split_tags, keep_tags):
             passage_text = passage["text"]
             if trim_buggy_sentences:

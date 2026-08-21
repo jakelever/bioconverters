@@ -53,7 +53,7 @@ def _extract_pmc_passages(
     return_xml,
     trim_buggy_sentences,
     inject_citations,
-    clean_xrefs_in_parentheses,
+    clean_xrefs_in_brackets,
 ):
     effective_keep_tags = keep_tags | {_CITATION_TAG} if inject_citations else keep_tags
     return _extract_passages(
@@ -63,7 +63,7 @@ def _extract_pmc_passages(
         effective_keep_tags,
         return_xml,
         trim_buggy_sentences,
-        clean_xrefs_in_parentheses,
+        clean_xrefs_in_brackets,
     )
 
 
@@ -140,7 +140,7 @@ def _extract_article_content(
     return_xml,
     trim_buggy_sentences,
     inject_citations,
-    clean_xrefs_in_parentheses,
+    clean_xrefs_in_brackets,
 ) -> TextSource:
     """
     Given the XML element representing the top-level of the scientific article, extract all the text sources
@@ -162,7 +162,7 @@ def _extract_article_content(
             return_xml,
             trim_buggy_sentences,
             inject_citations,
-            clean_xrefs_in_parentheses,
+            clean_xrefs_in_brackets,
         )
     ]
     subtitle_text = [
@@ -173,7 +173,7 @@ def _extract_article_content(
             return_xml,
             trim_buggy_sentences,
             inject_citations,
-            clean_xrefs_in_parentheses,
+            clean_xrefs_in_brackets,
         )
     ]
 
@@ -193,7 +193,7 @@ def _extract_article_content(
                 return_xml,
                 trim_buggy_sentences,
                 inject_citations,
-                clean_xrefs_in_parentheses,
+                clean_xrefs_in_brackets,
             )
         ],
         # Extract the full text from the paper as well as supplementaries and floating blocks of text
@@ -205,7 +205,7 @@ def _extract_article_content(
                 return_xml,
                 trim_buggy_sentences,
                 inject_citations,
-                clean_xrefs_in_parentheses,
+                clean_xrefs_in_brackets,
             )
         ],
         "back": [
@@ -216,7 +216,7 @@ def _extract_article_content(
                 return_xml,
                 trim_buggy_sentences,
                 inject_citations,
-                clean_xrefs_in_parentheses,
+                clean_xrefs_in_brackets,
             )
         ],
         "floating": [
@@ -227,7 +227,7 @@ def _extract_article_content(
                 return_xml,
                 trim_buggy_sentences,
                 inject_citations,
-                clean_xrefs_in_parentheses,
+                clean_xrefs_in_brackets,
             )
         ],
     }
@@ -307,7 +307,7 @@ def _get_meta_info_for_pmc_article(article_elem) -> PmcMeta:
             return_xml=False,
             trim_buggy_sentences=True,
             inject_citations=False,
-            clean_xrefs_in_parentheses=False,
+            clean_xrefs_in_brackets=False,
         )
     )
 
@@ -363,7 +363,7 @@ def parse_pmcxml(
     return_xml: bool = True,
     trim_buggy_sentences: bool = True,
     inject_citations: bool = True,
-    clean_xrefs_in_parentheses: bool = True,
+    clean_xrefs_in_brackets: bool = False,
 ) -> Iterable[PMCArticle]:
     """
     Parse a PMC XML file into a series of PMCArticle dicts (one per article/sub-article).
@@ -385,12 +385,18 @@ def parse_pmcxml(
             being dropped like other ignored tags - this affects return_xml=False output
             too, since the citation marker text is no longer blanked (though the injected
             attributes themselves don't survive being stripped down to plain text).
-        clean_xrefs_in_parentheses: drop a "(...)" parenthetical entirely, parentheses
-            included, when its whole content is a single non-citation cross-reference (e.g.
-            "(Table 1)", "(Fig. 2)") - avoids dangling text like "shown in ." left behind by
-            an otherwise-blanked xref. Only fires when the xref fills the parentheses on its
-            own; mixed ("(see Table 1)") or grouped ("(Figure 7 and Table 3)") parentheticals
-            are left untouched.
+        clean_xrefs_in_brackets: drop xref content that reads as clutter once left in
+            plain text, in two ways: (1) an xref whose own content is already wrapped in
+            square brackets (e.g. "[1]", "[1,2]") is dropped outright, brackets included -
+            this is determined from the xref's own content alone, regardless of what
+            surrounds it; (2) an xref that's the sole content of a surrounding "(...)"
+            (e.g. "(Table 1)", "(Fig. 2)") has the whole "(...)" dropped, parentheses
+            included - avoids dangling text like "shown in ." left behind by an otherwise-
+            blanked xref. The parenthetical case only fires when the xref fills the
+            parentheses on its own; mixed ("(see Table 1)") or grouped ("(Figure 7 and
+            Table 3)") parentheticals are left untouched. Default False here (unlike
+            pmcxml2txt), since this can remove citation markers that the caller may still
+            want visible in return_xml=True/inline-markup output.
     """
     source = _apply_pmc_xlink_fix(source)
 
@@ -433,7 +439,7 @@ def parse_pmcxml(
                     return_xml,
                     trim_buggy_sentences,
                     inject_citations,
-                    clean_xrefs_in_parentheses,
+                    clean_xrefs_in_brackets,
                 )
 
                 yield PMCArticle({**sub_meta, "text_sources": text_sources})
@@ -505,7 +511,7 @@ def pmcxml2txt(
     passage_separator: str = "\n\n",
     trim_buggy_sentences: bool = True,
     inject_citations: bool = False,
-    clean_xrefs_in_parentheses: bool = True,
+    clean_xrefs_in_brackets: bool = True,
 ) -> Iterator[str]:
     """
     Convert a PMC XML file into plain text, one string per article/sub-article.
@@ -524,7 +530,7 @@ def pmcxml2txt(
         inject_citations: see parse_pmcxml - defaults to False here since plain text output
             can't show the injected pmid/doi attributes anyway, so there's no upside to
             paying for the ref-list lookup.
-        clean_xrefs_in_parentheses: see parse_pmcxml.
+        clean_xrefs_in_brackets: see parse_pmcxml.
 
     Returns:
         An iterator over one plain text string per article/sub-article
@@ -535,7 +541,7 @@ def pmcxml2txt(
         return_xml=False,
         trim_buggy_sentences=trim_buggy_sentences,
         inject_citations=inject_citations,
-        clean_xrefs_in_parentheses=clean_xrefs_in_parentheses,
+        clean_xrefs_in_brackets=clean_xrefs_in_brackets,
     ):
         parts = []
         if include_metadata:

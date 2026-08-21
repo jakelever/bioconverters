@@ -132,23 +132,52 @@ _PARENTHETICAL_XREF_XML = '''<article>
 </article>'''
 
 
-def test_clean_xrefs_in_parentheses_default_drops_standalone_reference():
+def test_clean_xrefs_in_brackets_default_false_keeps_dangling_reference():
+    # parse_pmcxml defaults clean_xrefs_in_brackets to False (unlike pmcxml2txt)
     docs = list(parse_pmcxml(StringIO(_PARENTHETICAL_XREF_XML), inject_citations=False))
+    text = ' '.join(p['text'] for p in docs[0]['text_sources']['article'])
+    assert 'shown in (Table 3) below' in text
+
+
+def test_clean_xrefs_in_brackets_true_drops_standalone_parenthetical_reference():
+    docs = list(
+        parse_pmcxml(
+            StringIO(_PARENTHETICAL_XREF_XML),
+            inject_citations=False,
+            clean_xrefs_in_brackets=True,
+        )
+    )
     text = ' '.join(p['text'] for p in docs[0]['text_sources']['article'])
     assert 'shown in below' in text
     assert 'third row' in text  # unrelated plain-text mention still survives
 
 
-def test_clean_xrefs_in_parentheses_false_keeps_dangling_reference():
+_SQUARE_BRACKET_XREF_XML = '''<article>
+    <front><article-meta><article-id pub-id-type="pmid">1</article-id></article-meta></front>
+    <body><p>Results were reported previously <xref ref-type="fig" rid="f1">[1]</xref>. See Figure 1 for details.</p></body>
+</article>'''
+
+
+def test_clean_xrefs_in_brackets_true_drops_own_content_in_square_brackets():
+    # the xref's own content "[1]" is dropped outright, regardless of surrounding context
+    # (no parentheses needed, unlike the "(Table 1)" case)
     docs = list(
         parse_pmcxml(
-            StringIO(_PARENTHETICAL_XREF_XML),
+            StringIO(_SQUARE_BRACKET_XREF_XML),
             inject_citations=False,
-            clean_xrefs_in_parentheses=False,
+            clean_xrefs_in_brackets=True,
         )
     )
     text = ' '.join(p['text'] for p in docs[0]['text_sources']['article'])
-    assert 'shown in (Table 3) below' in text
+    # collapsed whitespace leaves a single space where "[1]" used to be
+    assert 'reported previously .' in text
+    assert 'Figure 1' in text  # unrelated, unbracketed xref still survives
+
+
+def test_clean_xrefs_in_brackets_false_keeps_own_content_in_square_brackets():
+    docs = list(parse_pmcxml(StringIO(_SQUARE_BRACKET_XREF_XML), inject_citations=False))
+    text = ' '.join(p['text'] for p in docs[0]['text_sources']['article'])
+    assert 'reported previously [1].' in text
 
 
 _TXT_XML = '''<article>

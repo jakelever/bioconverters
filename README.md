@@ -60,7 +60,7 @@ for text in pmcxml2txt('/path/to/pmc.xml', include_metadata=True):
     ...
 ```
 
-Flags: `sections` (default `("title", "abstract", "article")`, also available: `subtitle`, `back`, `floating`), `include_metadata`, `passage_separator`, `trim_buggy_sentences`, `inject_citations` (default `False` here - see below), `clean_xrefs_in_parentheses`.
+Flags: `sections` (default `("title", "abstract", "article")`, also available: `subtitle`, `back`, `floating`), `include_metadata`, `passage_separator`, `trim_buggy_sentences`, `inject_citations` (default `False` here - see below), `clean_xrefs_in_brackets` (default `True` here - see below).
 
 ### `pmcxml2bioc` - BioC documents
 
@@ -87,15 +87,15 @@ for article in parse_pmcxml('/path/to/pmc.xml'):
 Notable flags:
 - `keep_tags` - preserve inline markup (bold/italic/sup/sub/etc.) in each passage's text, e.g. `"some <sup>1</sup>H text"`. Pass `set()` for plain text.
 - `inject_citations` (default `True`) - resolve each in-text citation's `pmid`/`doi` and retag it to `<citation pmid="...">1</citation>`, kept in the output instead of dropped.
-- `clean_xrefs_in_parentheses` (default `True`) - drop a purely-parenthetical reference like `"(Table 1)"` entirely, since it reads as redundant clutter once cross-references are no longer blanked out.
+- `clean_xrefs_in_brackets` (default `False` here, unlike `pmcxml2txt`) - drop a reference that's wrapped in `[...]` or `(...)` on its own, since it reads as redundant clutter once cross-references are no longer blanked out - see below.
 
 ## Notes on text extraction
 
-Text is extracted using [spans_and_trees](https://github.com/jakelever/spans_and_trees). Table content is omitted from extracted text. Overly long, unbroken runs of text are automatically trimmed to a maximum length.
+Text is extracted using [spans_and_trees](https://github.com/jakelever/spans_and_trees). Table content is omitted from extracted text. Overly long, unbroken runs of text are automatically trimmed to a maximum length (controlled by the `trim_buggy_sentences` flag).
 
-## `inject_citations`
+## Getting citation info with `inject_citations`
 
-PMC articles cite references with `<xref ref-type="bibr" rid="...">1</xref>`, where `rid` points at a `<ref>` in the back-matter `<ref-list>`. With `inject_citations=True` (the default for `parse_pmcxml`), each of these is resolved against its `<ref>` and retagged to `<citation>`, with the referenced pub-ids (e.g. `pmid`, `doi`) and a `count` of how many references it bundles added as attributes:
+PMC articles cite references with `<xref ref-type="bibr" rid="...">1</xref>`, where `rid` points at a `<ref>` in the back-matter `<ref-list>`. With `inject_citations=True` (the default for `parse_pmcxml`), the information is pulled from the bibliography so no cross-referencing is needed! The referenced pub-ids (e.g. `pmid`, `doi`) and a `count` of how many references are added as attributes:
 
 ```xml
 <!-- before -->
@@ -107,13 +107,24 @@ PMC articles cite references with `<xref ref-type="bibr" rid="...">1</xref>`, wh
 
 A grouped citation (multiple `rid`s, e.g. "[2,3]") gets its pub-id values `|`-joined, with `count` telling you how many references were bundled without needing to split them yourself. Citations are kept in the output like this instead of being dropped like other ignored tags - the marker text ("2,3") stays visible either way, so this mainly matters if you want the `pmid`/`doi`/`count` attributes; they don't survive `return_xml=False`'s plain-text output, which is why `pmcxml2bioc` and `pmcxml2txt` both default `inject_citations` to `False` (no point paying for the ref-list lookup if nothing will show it).
 
-## `clean_xrefs_in_parentheses`
+## `clean_xrefs_in_brackets`
 
-Cross-references like `<xref ref-type="fig">Table 1</xref>` are kept in extracted text (fig/table/section labels need to survive for sentences that read them as a word, e.g. "shown in Table 1"). But when a reference is the *entire* content of a parenthetical, e.g. `"(Table 1)"`, it usually reads as redundant clutter rather than as part of the sentence. With `clean_xrefs_in_parentheses=True` (the default), that whole parenthetical is dropped:
+Cross-references like `<xref ref-type="fig">Table 1</xref>` are kept in extracted text (fig/table/section labels need to survive for sentences that read them as a word, e.g. "shown in Table 1"). But a reference that's already clutter - either bracketed in its own content, or the sole content of a surrounding parenthetical - usually reads better dropped. `clean_xrefs_in_brackets=True` handles both:
+
+**1. Square-bracketed content** - some articles give citation markers as `<xref ref-type="bibr" rid="...">[14]</xref>`, brackets and all. This is judged purely from the xref's own text, so it's dropped outright regardless of what surrounds it:
+
+```
+before: "...preferentially the active conformation[14]. Figure 5..."
+after:  "...preferentially the active conformation . Figure 5..."
+```
+
+**2. Parenthetical references** - when a reference is the *entire* content of a `(...)`, e.g. `"(Table 1)"`, the whole parenthetical is dropped:
 
 ```
 before: "...reported in various solid cancers (Table 1). Analogous mutations..."
 after:  "...reported in various solid cancers. Analogous mutations..."
 ```
 
-This only fires when the xref fills the parentheses on its own - a mixed reference like `"(see Table 1)"` or a grouped one like `"(Figure 7 and Table 3)"` is left untouched, since the reference reads as part of the sentence in those cases.
+The parenthetical case only fires when the xref fills the parentheses on its own - a mixed reference like `"(see Table 1)"` or a grouped one like `"(Figure 7 and Table 3)"` is left untouched, since the reference reads as part of the sentence in those cases.
+
+Default is `True` for `pmcxml2txt` (plain text reads better without the clutter) and `False` for `parse_pmcxml`/`pmcxml2bioc` (so citation markers stay put unless you opt in).

@@ -5,7 +5,7 @@ import pytest
 
 from bioconverters.pmc_constants import PMC_IGNORE_TAGS, PMC_KEEP_TAGS, PMC_SPLIT_TAGS
 from bioconverters.utils import (
-    _blank_parenthetical_xrefs,
+    _blank_bracketed_xrefs,
     _extract_passages,
     _remove_brackets_from_titles,
     _remove_brackets_without_words,
@@ -251,30 +251,30 @@ def test_extract_passages_skips_passages_left_empty_by_ignore_tags():
     assert passages == ['Real text.']
 
 
-def test_blank_parenthetical_xrefs_drops_standalone_reference():
+def test_blank_bracketed_xrefs_drops_standalone_reference():
     text = 'The results are shown in (Table 1) below.'
     start = text.index('Table 1')
     spans = [(start, len('Table 1'), 'xref', {})]
 
-    new_text, kept_spans = _blank_parenthetical_xrefs(text, spans)
+    new_text, kept_spans = _blank_bracketed_xrefs(text, spans)
 
     assert len(new_text) == len(text)
     assert new_text == 'The results are shown in           below.'
     assert kept_spans == []
 
 
-def test_blank_parenthetical_xrefs_keeps_mixed_prose():
+def test_blank_bracketed_xrefs_keeps_mixed_prose():
     text = 'The results are shown in (see Table 1) below.'
     start = text.index('Table 1')
     spans = [(start, len('Table 1'), 'xref', {})]
 
-    new_text, kept_spans = _blank_parenthetical_xrefs(text, spans)
+    new_text, kept_spans = _blank_bracketed_xrefs(text, spans)
 
     assert new_text == text
     assert kept_spans == spans
 
 
-def test_blank_parenthetical_xrefs_keeps_grouped_references():
+def test_blank_bracketed_xrefs_keeps_grouped_references():
     text = 'See (Figure 7 and Table 3) for details.'
     fig_start = text.index('Figure 7')
     table_start = text.index('Table 3')
@@ -283,18 +283,57 @@ def test_blank_parenthetical_xrefs_keeps_grouped_references():
         (table_start, len('Table 3'), 'xref', {}),
     ]
 
-    new_text, kept_spans = _blank_parenthetical_xrefs(text, spans)
+    new_text, kept_spans = _blank_bracketed_xrefs(text, spans)
 
     assert new_text == text
     assert kept_spans == spans
 
 
-def test_blank_parenthetical_xrefs_passes_through_non_xref_spans():
+def test_blank_bracketed_xrefs_passes_through_non_xref_spans():
     text = 'A (parenthetical) note.'
     start = text.index('parenthetical')
     spans = [(start, len('parenthetical'), 'italic', {})]
 
-    new_text, kept_spans = _blank_parenthetical_xrefs(text, spans)
+    new_text, kept_spans = _blank_bracketed_xrefs(text, spans)
 
     assert new_text == text
     assert kept_spans == spans
+
+
+def test_blank_bracketed_xrefs_drops_own_content_wrapped_in_square_brackets():
+    # the xref's own text is already "[1]" - no surrounding context needed to justify
+    # dropping it, unlike the parenthetical case
+    text = 'Results were reported previously [1].'
+    start = text.index('[1]')
+    spans = [(start, len('[1]'), 'xref', {})]
+
+    new_text, kept_spans = _blank_bracketed_xrefs(text, spans)
+
+    assert len(new_text) == len(text)
+    assert new_text == 'Results were reported previously    .'
+    assert kept_spans == []
+
+
+def test_blank_bracketed_xrefs_drops_own_content_with_multiple_ids_in_brackets():
+    text = 'As shown before [1,2,3].'
+    start = text.index('[1,2,3]')
+    spans = [(start, len('[1,2,3]'), 'xref', {})]
+
+    new_text, kept_spans = _blank_bracketed_xrefs(text, spans)
+
+    assert len(new_text) == len(text)
+    assert new_text == text.replace('[1,2,3]', ' ' * len('[1,2,3]'))
+    assert kept_spans == []
+
+
+def test_blank_bracketed_xrefs_own_content_check_ignores_surrounding_parentheses():
+    # an already-bracketed xref inside parentheses is still caught by the own-content
+    # check, even though it isn't immediately adjacent to the parens (mixed prose)
+    text = 'As shown before (see [1] for details).'
+    start = text.index('[1]')
+    spans = [(start, len('[1]'), 'xref', {})]
+
+    new_text, kept_spans = _blank_bracketed_xrefs(text, spans)
+
+    assert new_text == 'As shown before (see     for details).'
+    assert kept_spans == []
