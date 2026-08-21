@@ -149,10 +149,19 @@ def _format_mesh_field(prefix: str, mesh_id: str, major_topic_yn: str, name: str
 
 def parse_pubmedxml(
     source: Union[str, TextIO],
+    fix_exponentials: bool = False,
 ) -> Iterable[PubMedArticle]:
     """
     Args:
         source: path to the MEDLINE xml file
+        fix_exponentials: replace a numeric "<sup>" immediately preceded by a digit with
+            "^N" instead of losing it to plain concatenation, e.g. "10<sup>8</sup> m/s" ->
+            "10^8 m/s" (plain concatenation alone would silently give the wrong value,
+            "108 m/s"). An ordinal suffix ("1<sup>st</sup>") isn't numeric content, and an
+            isotope prefix ("<sup>14</sup>C") isn't preceded by a digit, so neither
+            qualifies and both come through unchanged ("1st", "14C"), which is already
+            correct for those cases. Default False here (unlike pubmedxml2txt/
+            pubmedxml2bioc).
     """
     for event, elem in etree.iterparse(source, events=("start", "end", "start-ns", "end-ns")):
         if event == "end" and elem.tag == "PubmedArticle":  # MedlineCitation'):
@@ -275,6 +284,7 @@ def parse_pubmedxml(
                 PUBMED_KEEP_TAGS,
                 return_xml=False,
                 trim_buggy_sentences=True,
+                fix_exponentials=fix_exponentials,
             )
             title_text = [_remove_brackets_from_titles(t) for t in title_passages]
             title_text = [html.unescape(t) for t in title_text]
@@ -289,6 +299,7 @@ def parse_pubmedxml(
                 PUBMED_KEEP_TAGS,
                 return_xml=False,
                 trim_buggy_sentences=True,
+                fix_exponentials=fix_exponentials,
             )
             abstract_text = [html.unescape(t) for t in abstract_passages]
             abstract_text = [_remove_brackets_without_words(t) for t in abstract_text]
@@ -332,12 +343,14 @@ def parse_pubmedxml(
 
 def pubmedxml2bioc(
     source: Union[str, TextIO],
+    fix_exponentials: bool = True,
 ) -> Iterable[bioc.BioCDocument]:
     """
     Args:
         source: path to the MEDLINE xml file
+        fix_exponentials: see parse_pubmedxml. Defaults to True here, unlike parse_pubmedxml.
     """
-    for pm_doc in parse_pubmedxml(source):
+    for pm_doc in parse_pubmedxml(source, fix_exponentials=fix_exponentials):
         bioc_doc = bioc.BioCDocument()
         bioc_doc.id = pm_doc["pmid"]
         bioc_doc.infons["title"] = " ".join(pm_doc["title"])
@@ -373,6 +386,7 @@ def pubmedxml2txt(
     sections: Iterable[str] = ("title", "abstract"),
     include_metadata: bool = False,
     passage_separator: str = "\n\n",
+    fix_exponentials: bool = True,
 ) -> Iterator[str]:
     """
     Convert a MEDLINE XML file into plain text, one string per article.
@@ -385,11 +399,12 @@ def pubmedxml2txt(
             like any other passage. Fields that are empty/missing are omitted.
         passage_separator: string used to join the header (if any), and every extracted
             passage, into the single returned string.
+        fix_exponentials: see parse_pubmedxml. Defaults to True here, unlike parse_pubmedxml.
 
     Returns:
         An iterator over one plain text string per article
     """
-    for pm_doc in parse_pubmedxml(source):
+    for pm_doc in parse_pubmedxml(source, fix_exponentials=fix_exponentials):
         parts = []
         if include_metadata:
             header = _format_metadata_header(

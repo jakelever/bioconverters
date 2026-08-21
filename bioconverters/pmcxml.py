@@ -54,8 +54,13 @@ def _extract_pmc_passages(
     trim_buggy_sentences,
     inject_citations,
     clean_xrefs_in_brackets,
+    fix_exponentials,
 ):
-    effective_keep_tags = keep_tags | {_CITATION_TAG} if inject_citations else keep_tags
+    effective_keep_tags = keep_tags
+    if inject_citations:
+        effective_keep_tags = effective_keep_tags | {_CITATION_TAG}
+    if fix_exponentials:
+        effective_keep_tags = effective_keep_tags | {"sup"}
     return _extract_passages(
         elements,
         PMC_IGNORE_TAGS,
@@ -64,6 +69,7 @@ def _extract_pmc_passages(
         return_xml,
         trim_buggy_sentences,
         clean_xrefs_in_brackets,
+        fix_exponentials,
     )
 
 
@@ -141,6 +147,7 @@ def _extract_article_content(
     trim_buggy_sentences,
     inject_citations,
     clean_xrefs_in_brackets,
+    fix_exponentials,
 ) -> TextSource:
     """
     Given the XML element representing the top-level of the scientific article, extract all the text sources
@@ -163,6 +170,7 @@ def _extract_article_content(
             trim_buggy_sentences,
             inject_citations,
             clean_xrefs_in_brackets,
+            fix_exponentials,
         )
     ]
     subtitle_text = [
@@ -174,6 +182,7 @@ def _extract_article_content(
             trim_buggy_sentences,
             inject_citations,
             clean_xrefs_in_brackets,
+            fix_exponentials,
         )
     ]
 
@@ -194,6 +203,7 @@ def _extract_article_content(
                 trim_buggy_sentences,
                 inject_citations,
                 clean_xrefs_in_brackets,
+                fix_exponentials,
             )
         ],
         # Extract the full text from the paper as well as supplementaries and floating blocks of text
@@ -206,6 +216,7 @@ def _extract_article_content(
                 trim_buggy_sentences,
                 inject_citations,
                 clean_xrefs_in_brackets,
+                fix_exponentials,
             )
         ],
         "back": [
@@ -217,6 +228,7 @@ def _extract_article_content(
                 trim_buggy_sentences,
                 inject_citations,
                 clean_xrefs_in_brackets,
+                fix_exponentials,
             )
         ],
         "floating": [
@@ -228,6 +240,7 @@ def _extract_article_content(
                 trim_buggy_sentences,
                 inject_citations,
                 clean_xrefs_in_brackets,
+                fix_exponentials,
             )
         ],
     }
@@ -308,6 +321,7 @@ def _get_meta_info_for_pmc_article(article_elem) -> PmcMeta:
             trim_buggy_sentences=True,
             inject_citations=False,
             clean_xrefs_in_brackets=False,
+            fix_exponentials=False,
         )
     )
 
@@ -364,6 +378,7 @@ def parse_pmcxml(
     trim_buggy_sentences: bool = True,
     inject_citations: bool = True,
     clean_xrefs_in_brackets: bool = False,
+    fix_exponentials: bool = False,
 ) -> Iterable[PMCArticle]:
     """
     Parse a PMC XML file into a series of PMCArticle dicts (one per article/sub-article).
@@ -402,6 +417,15 @@ def parse_pmcxml(
             wrappers are left untouched. Default False here (unlike pmcxml2txt), since this
             can remove citation markers that the caller may still want visible in
             return_xml=True/inline-markup output.
+        fix_exponentials: with return_xml=False, replace a numeric "<sup>" immediately
+            preceded by a digit with "^N" instead of losing it to plain concatenation, e.g.
+            "10<sup>8</sup> m/s" -> "10^8 m/s" (plain concatenation alone would silently
+            give the wrong value, "108 m/s"). An ordinal suffix ("1<sup>st</sup>") isn't
+            numeric content, and an isotope prefix ("<sup>14</sup>C") isn't preceded by a
+            digit, so neither qualifies and both come through unchanged ("1st", "14C"),
+            which is already correct for those cases. Has no effect when return_xml=True,
+            since the "<sup>" tag itself is already preserved as real markup in that case.
+            Default False here (unlike pmcxml2txt/pmcxml2bioc).
     """
     source = _apply_pmc_xlink_fix(source)
 
@@ -445,6 +469,7 @@ def parse_pmcxml(
                     trim_buggy_sentences,
                     inject_citations,
                     clean_xrefs_in_brackets,
+                    fix_exponentials,
                 )
 
                 yield PMCArticle({**sub_meta, "text_sources": text_sources})
@@ -455,12 +480,14 @@ def parse_pmcxml(
 
 def pmcxml2bioc(
     source: Union[str, TextIO],
+    fix_exponentials: bool = True,
 ) -> Iterator[bioc.BioCDocument]:
     """
     Convert a PMC XML file into its Bioc equivalent
 
     Args:
         source: The text or file handle containing the PMC XML
+        fix_exponentials: see parse_pmcxml. Defaults to True here, unlike parse_pmcxml.
 
     Raises:
         RuntimeError: On any parsing errors
@@ -470,7 +497,11 @@ def pmcxml2bioc(
     """
     try:
         for pmc_doc in parse_pmcxml(
-            source, keep_tags=set(), return_xml=False, inject_citations=False
+            source,
+            keep_tags=set(),
+            return_xml=False,
+            inject_citations=False,
+            fix_exponentials=fix_exponentials,
         ):
             bioc_doc = bioc.BioCDocument()
             bioc_doc.id = pmc_doc["pmid"]
@@ -517,6 +548,7 @@ def pmcxml2txt(
     trim_buggy_sentences: bool = True,
     inject_citations: bool = False,
     clean_xrefs_in_brackets: bool = True,
+    fix_exponentials: bool = True,
 ) -> Iterator[str]:
     """
     Convert a PMC XML file into plain text, one string per article/sub-article.
@@ -536,6 +568,7 @@ def pmcxml2txt(
             can't show the injected pmid/doi attributes anyway, so there's no upside to
             paying for the ref-list lookup.
         clean_xrefs_in_brackets: see parse_pmcxml.
+        fix_exponentials: see parse_pmcxml. Defaults to True here, unlike parse_pmcxml.
 
     Returns:
         An iterator over one plain text string per article/sub-article
@@ -547,6 +580,7 @@ def pmcxml2txt(
         trim_buggy_sentences=trim_buggy_sentences,
         inject_citations=inject_citations,
         clean_xrefs_in_brackets=clean_xrefs_in_brackets,
+        fix_exponentials=fix_exponentials,
     ):
         parts = []
         if include_metadata:

@@ -121,7 +121,7 @@ Some XML tags convey meaningful information and text looks horrible without the 
 
 There are two options:
 
-1. If you want plain text, tags are stripped automatically. But the `fix_exponentials` flag (default `True` for the `*2txt`/`*2bioc` methods) tries to spot cases where an exponential can be nicely cleaned up to `"3x10^8 m/s"`.
+1. If you want plain text, tags are stripped automatically. But the `fix_exponentials` flag (default `True` for the `*2txt`/`*2bioc` methods, `False` for `parse_pmcxml`/`parse_pubmedxml`) tries to spot cases where an exponential can be nicely cleaned up to `"3x10^8 m/s"`. It only fires when a `<sup>` is immediately preceded by a digit *and* its own content is itself a number - this deliberately excludes an ordinal suffix (`"1<sup>st</sup>"`, content isn't numeric) and an isotope prefix (`"<sup>14</sup>C"`, not preceded by a digit), both of which already read correctly as plain concatenation (`"1st"`, `"14C"`) and would be broken by blindly inserting a `^`.
 2. Or work with a modified XML format that keeps some of the formatting tags. `parse_pmcxml` does this, controlled by the `return_xml` boolean flag and `keep_tags`, which defaults to the `pmc_constants.PMC_KEEP_TAGS` list of tags. This list includes `<sup>`, `<sub>` and others.
 
 ## Getting citation info with `inject_citations`

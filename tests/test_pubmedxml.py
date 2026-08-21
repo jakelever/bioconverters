@@ -2,7 +2,7 @@ from io import StringIO
 
 import pytest
 
-from bioconverters import pubmedxml2bioc, pubmedxml2txt
+from bioconverters import parse_pubmedxml, pubmedxml2bioc, pubmedxml2txt
 
 from .util import fetch_xml
 
@@ -324,3 +324,39 @@ def test_pubmedxml2txt_drops_abstract_passage_left_empty_by_bracket_cleanup():
     </PubmedArticle>'''
     texts = list(pubmedxml2txt(StringIO(xml), sections=('abstract',)))
     assert texts == ['Real content.']
+
+
+def test_fix_exponentials_defaults():
+    import inspect
+
+    assert inspect.signature(parse_pubmedxml).parameters['fix_exponentials'].default is False
+    assert inspect.signature(pubmedxml2txt).parameters['fix_exponentials'].default is True
+    assert inspect.signature(pubmedxml2bioc).parameters['fix_exponentials'].default is True
+
+
+_EXPONENTIAL_XML = '''<PubmedArticle>
+    <MedlineCitation>
+        <PMID>99</PMID>
+        <Article>
+            <Journal><JournalIssue><PubDate><Year>2020</Year></PubDate></JournalIssue></Journal>
+            <ArticleTitle>A Test Title</ArticleTitle>
+            <Abstract><AbstractText>The speed of light is 3x10<sup>8</sup> m/s, first measured in the 1<sup>st</sup> century by <sup>14</sup>C dating pioneers.</AbstractText></Abstract>
+        </Article>
+    </MedlineCitation>
+    <PubmedData><ArticleIdList></ArticleIdList></PubmedData>
+</PubmedArticle>'''
+
+
+def test_fix_exponentials_true_converts_exponent_via_pubmedxml2txt():
+    texts = list(pubmedxml2txt(StringIO(_EXPONENTIAL_XML), sections=('abstract',), fix_exponentials=True))
+    text = texts[0]
+    assert '3x10^8 m/s' in text
+    assert '1st century' in text
+    assert '14C dating' in text
+
+
+def test_fix_exponentials_false_leaves_exponent_glued_via_pubmedxml2txt():
+    texts = list(pubmedxml2txt(StringIO(_EXPONENTIAL_XML), sections=('abstract',), fix_exponentials=False))
+    text = texts[0]
+    assert '3x108 m/s' in text
+    assert '^' not in text

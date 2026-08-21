@@ -148,6 +148,24 @@ def _blank_bracketed_xrefs(text: str, spans: list) -> tuple:
     return new_text, kept_spans
 
 
+_EXPONENT_RE = re.compile(r"(?<=\d)<sup[^>]*>(-?\d+)</sup>")
+
+
+def _fix_exponentials(xml_string: str) -> str:
+    """
+    Replace "<sup>N</sup>" with "^N" wherever it's immediately preceded by a digit and its
+    own content is itself a (possibly negative) integer, e.g. "10<sup>8</sup>" -> "10^8" -
+    recovers the exponent's meaning that would otherwise be lost once markup is stripped
+    (e.g. "10<sup>8</sup>" -> "108", silently wrong).
+
+    Left alone otherwise - an ordinal suffix ("1<sup>st</sup>") isn't numeric content, and
+    an isotope prefix ("<sup>14</sup>C") isn't preceded by a digit, so neither qualifies and
+    both fall through to being stripped down to plain concatenation as before ("1st", "14C"),
+    which is already correct for those cases.
+    """
+    return _EXPONENT_RE.sub(r"^\1", xml_string)
+
+
 def _format_metadata_header(fields: dict) -> str:
     """
     Render an ordered {label: value} mapping as "label: value" lines, one per field, skipping
@@ -186,6 +204,7 @@ def _extract_passages(
     return_xml,
     trim_buggy_sentences,
     clean_xrefs_in_brackets: bool = False,
+    fix_exponentials: bool = False,
 ):
     """
     Flatten a list of XML elements into cleaned-up passages, one string per passage. With
@@ -202,6 +221,11 @@ def _extract_passages(
         trim_buggy_sentences: trim overly long, unbroken runs of text (see _trim_buggy_sentences)
         clean_xrefs_in_brackets: drop xref content that's either wrapped in "[...]" itself,
             or the sole content of a surrounding "(...)"/"[...]" (see _blank_bracketed_xrefs)
+        fix_exponentials: with return_xml=False, replace a numeric "<sup>" immediately
+            preceded by a digit with "^N" instead of losing it to plain concatenation (see
+            _fix_exponentials). Requires "sup" to be in keep_tags, otherwise there's no
+            markup left by this point to detect. Has no effect when return_xml=True, since
+            the "<sup>" tag itself is already preserved as real markup in that case.
     """
     if not isinstance(elements, list):
         elements = [elements]
@@ -220,6 +244,9 @@ def _extract_passages(
             tree = spans_to_tree(passage_text, passage["spans"])
             xml_string = _tree_to_xml_string(tree)
             xml_string = _collapse_whitespace(xml_string)
+
+            if not return_xml and fix_exponentials:
+                xml_string = _fix_exponentials(xml_string)
 
             results.append(xml_string if return_xml else _strip_markup(xml_string))
 

@@ -217,6 +217,36 @@ def test_pmcxml2txt_inject_citations_defaults_to_false():
     assert inspect.signature(pmcxml2txt).parameters['inject_citations'].default is False
 
 
+def test_fix_exponentials_defaults():
+    import inspect
+
+    assert inspect.signature(parse_pmcxml).parameters['fix_exponentials'].default is False
+    assert inspect.signature(pmcxml2txt).parameters['fix_exponentials'].default is True
+    assert inspect.signature(pmcxml2bioc).parameters['fix_exponentials'].default is True
+
+
+_EXPONENTIAL_XML = '''<article>
+    <front><article-meta><article-id pub-id-type="pmid">1</article-id></article-meta></front>
+    <body><p>The speed of light is 3x10<sup>8</sup> m/s, first measured in the 1<sup>st</sup> century by <sup>14</sup>C dating pioneers.</p></body>
+</article>'''
+
+
+def test_fix_exponentials_true_converts_exponent_via_pmcxml2txt():
+    texts = list(pmcxml2txt(StringIO(_EXPONENTIAL_XML), sections=('article',), fix_exponentials=True))
+    text = texts[0]
+    assert '3x10^8 m/s' in text
+    # ordinal and isotope notation are untouched
+    assert '1st century' in text
+    assert '14C dating' in text
+
+
+def test_fix_exponentials_false_leaves_exponent_glued_via_pmcxml2txt():
+    texts = list(pmcxml2txt(StringIO(_EXPONENTIAL_XML), sections=('article',), fix_exponentials=False))
+    text = texts[0]
+    assert '3x108 m/s' in text
+    assert '^' not in text
+
+
 _MALFORMED_ARTICLE_ID_XML = '''<article>
     <front><article-meta>
         <article-id>NoTypeAttribute</article-id>

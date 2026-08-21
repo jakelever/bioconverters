@@ -7,6 +7,7 @@ from bioconverters.pmc_constants import PMC_IGNORE_TAGS, PMC_KEEP_TAGS, PMC_SPLI
 from bioconverters.utils import (
     _blank_bracketed_xrefs,
     _extract_passages,
+    _fix_exponentials,
     _remove_brackets_from_titles,
     _remove_brackets_without_words,
 )
@@ -364,6 +365,40 @@ def test_blank_bracketed_xrefs_drops_own_content_wrapped_in_square_brackets():
     assert len(new_text) == len(text)
     assert new_text == 'Results were reported previously    .'
     assert kept_spans == []
+
+
+def test_fix_exponentials_converts_digit_preceded_sup_to_caret():
+    assert _fix_exponentials('10<sup>8</sup> m/s') == '10^8 m/s'
+
+
+def test_fix_exponentials_handles_negative_exponent():
+    assert _fix_exponentials('10<sup>-8</sup> m/s') == '10^-8 m/s'
+
+
+def test_fix_exponentials_handles_multi_digit_base():
+    assert _fix_exponentials('299<sup>2</sup>') == '299^2'
+
+
+def test_fix_exponentials_leaves_ordinal_suffix_untouched():
+    # sup content isn't numeric, so this falls through unchanged
+    assert _fix_exponentials('1<sup>st</sup> place') == '1<sup>st</sup> place'
+
+
+def test_fix_exponentials_leaves_isotope_notation_untouched():
+    # sup content is numeric, but nothing precedes it with a digit
+    assert _fix_exponentials('<sup>14</sup>C labeling') == '<sup>14</sup>C labeling'
+
+
+def test_fix_exponentials_leaves_non_numeric_preceding_text_untouched():
+    assert _fix_exponentials('see note<sup>3</sup>') == 'see note<sup>3</sup>'
+
+
+def test_fix_exponentials_matches_sup_with_attributes():
+    assert _fix_exponentials('10<sup id="x">8</sup> m/s') == '10^8 m/s'
+
+
+def test_fix_exponentials_handles_multiple_occurrences():
+    assert _fix_exponentials('10<sup>8</sup> and 10<sup>-3</sup>') == '10^8 and 10^-3'
 
 
 def test_blank_bracketed_xrefs_drops_own_content_with_multiple_ids_in_brackets():
