@@ -2,7 +2,7 @@ from io import StringIO
 
 import pytest
 
-from bioconverters import parse_pmcxml, pmcxml2bioc
+from bioconverters import parse_pmcxml, pmcxml2bioc, pmcxml2txt
 
 from .util import fetch_xml
 
@@ -144,3 +144,40 @@ def test_clean_xrefs_in_parentheses_false_keeps_dangling_reference():
     )
     text = ' '.join(p['text'] for p in docs[0]['text_sources']['article'])
     assert 'shown in (Table 3) below' in text
+
+
+_TXT_XML = '''<article>
+    <front><article-meta>
+        <article-id pub-id-type="pmid">42</article-id>
+        <article-id pub-id-type="pmc">PMC42</article-id>
+        <title-group><article-title>A Great Title</article-title></title-group>
+        <abstract><p>An abstract sentence.</p></abstract>
+    </article-meta></front>
+    <body><p>Body text here.</p></body>
+</article>'''
+
+
+def test_pmcxml2txt_joins_default_sections_with_separator():
+    texts = list(pmcxml2txt(StringIO(_TXT_XML)))
+    assert texts == ['A Great Title\n\nAn abstract sentence.\n\nBody text here.']
+
+
+def test_pmcxml2txt_sections_filters_and_orders():
+    texts = list(pmcxml2txt(StringIO(_TXT_XML), sections=('article', 'title')))
+    assert texts == ['Body text here.\n\nA Great Title']
+
+
+def test_pmcxml2txt_custom_passage_separator():
+    texts = list(pmcxml2txt(StringIO(_TXT_XML), sections=('title', 'abstract'), passage_separator=' | '))
+    assert texts == ['A Great Title | An abstract sentence.']
+
+
+def test_pmcxml2txt_include_metadata_prepends_header():
+    texts = list(pmcxml2txt(StringIO(_TXT_XML), sections=('title',), include_metadata=True))
+    assert texts == ['pmid: 42\npmcid: PMC42\n\nA Great Title']
+
+
+def test_pmcxml2txt_inject_citations_defaults_to_false():
+    import inspect
+
+    assert inspect.signature(pmcxml2txt).parameters['inject_citations'].default is False

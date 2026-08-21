@@ -13,7 +13,7 @@ except ImportError:
 import bioc
 
 from .pmc_tags import PMC_ALLOWED_SUBSECTIONS, PMC_IGNORE_TAGS, PMC_KEEP_TAGS, PMC_SPLIT_TAGS
-from .utils import _extract_passages, _remove_brackets_from_titles
+from .utils import _extract_passages, _format_metadata_header, _remove_brackets_from_titles
 
 _MONTH_NAME_TO_NUMBER = {m: i for i, m in enumerate(calendar.month_name)}
 _MONTH_NAME_TO_NUMBER.update({m: i for i, m in enumerate(calendar.month_abbr)})
@@ -489,3 +489,66 @@ def pmcxml2bioc(
 
     except etree.ParseError:
         raise RuntimeError("Parsing error in PMC xml file: %s" % source)
+
+
+def pmcxml2txt(
+    source: Union[str, TextIO],
+    sections: Iterable[str] = ("title", "abstract", "article"),
+    include_metadata: bool = False,
+    passage_separator: str = "\n\n",
+    trim_buggy_sentences: bool = True,
+    inject_citations: bool = False,
+    clean_xrefs_in_parentheses: bool = True,
+) -> Iterator[str]:
+    """
+    Convert a PMC XML file into plain text, one string per article/sub-article.
+
+    Args:
+        source: The text or file handle containing the PMC XML
+        sections: which of the six text_sources groups ("title", "subtitle", "abstract",
+            "article", "back", "floating") to include, and in what order.
+        include_metadata: prepend a "label: value" header block (pmid, pmcid, doi, year,
+            month, day, journal) before the text, separated by passage_separator like any
+            other passage. Fields that are empty/missing are omitted.
+        passage_separator: string used to join the header (if any), and every extracted
+            passage, into the single returned string.
+        trim_buggy_sentences: trim overly long, unbroken runs of text to a maximum length,
+            to avoid issues with buggy sentences in some PMC articles.
+        inject_citations: see parse_pmcxml - defaults to False here since plain text output
+            can't show the injected pmid/doi attributes anyway, so there's no upside to
+            paying for the ref-list lookup.
+        clean_xrefs_in_parentheses: see parse_pmcxml.
+
+    Returns:
+        An iterator over one plain text string per article/sub-article
+    """
+    for doc in parse_pmcxml(
+        source,
+        keep_tags=set(),
+        return_xml=False,
+        trim_buggy_sentences=trim_buggy_sentences,
+        inject_citations=inject_citations,
+        clean_xrefs_in_parentheses=clean_xrefs_in_parentheses,
+    ):
+        parts = []
+        if include_metadata:
+            header = _format_metadata_header(
+                {
+                    "pmid": doc["pmid"],
+                    "pmcid": doc["pmcid"],
+                    "doi": doc["doi"],
+                    "year": doc["pub_year"],
+                    "month": doc["pub_month"],
+                    "day": doc["pub_day"],
+                    "journal": doc["journal"],
+                }
+            )
+            if header:
+                parts.append(header)
+
+        for section in sections:
+            for passage in doc["text_sources"][section]:
+                if passage["text"]:
+                    parts.append(passage["text"])
+
+        yield passage_separator.join(parts)

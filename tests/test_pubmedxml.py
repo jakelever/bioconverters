@@ -2,7 +2,7 @@ from io import StringIO
 
 import pytest
 
-from bioconverters import pubmedxml2bioc
+from bioconverters import pubmedxml2bioc, pubmedxml2txt
 
 from .util import fetch_xml
 
@@ -42,3 +42,39 @@ def test_convert_has_expected_sections(doc):
 )
 def test_metadata_infons(doc, infon, value):
     assert doc.infons[infon] == value
+
+
+_TXT_XML = '''<PubmedArticle>
+    <MedlineCitation>
+        <PMID>99</PMID>
+        <Article>
+            <Journal>
+                <JournalIssue><PubDate><Year>2020</Year><Month>5</Month><Day>1</Day></PubDate></JournalIssue>
+                <Title>Journal of Testing</Title>
+            </Journal>
+            <ArticleTitle>A Test Title</ArticleTitle>
+            <Abstract><AbstractText>An abstract sentence.</AbstractText></Abstract>
+        </Article>
+    </MedlineCitation>
+    <PubmedData><ArticleIdList></ArticleIdList></PubmedData>
+</PubmedArticle>'''
+
+
+def test_pubmedxml2txt_joins_default_sections_with_separator():
+    texts = list(pubmedxml2txt(StringIO(_TXT_XML)))
+    assert texts == ['A Test Title\n\nAn abstract sentence.']
+
+
+def test_pubmedxml2txt_sections_filters_and_orders():
+    texts = list(pubmedxml2txt(StringIO(_TXT_XML), sections=('abstract',)))
+    assert texts == ['An abstract sentence.']
+
+
+def test_pubmedxml2txt_custom_passage_separator():
+    texts = list(pubmedxml2txt(StringIO(_TXT_XML), passage_separator=' | '))
+    assert texts == ['A Test Title | An abstract sentence.']
+
+
+def test_pubmedxml2txt_include_metadata_prepends_header():
+    texts = list(pubmedxml2txt(StringIO(_TXT_XML), sections=('title',), include_metadata=True))
+    assert texts == ['pmid: 99\nyear: 2020\nmonth: 5\nday: 1\njournal: Journal of Testing\n\nA Test Title']

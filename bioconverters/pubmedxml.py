@@ -2,7 +2,7 @@ import calendar
 import html
 import re
 import xml.etree.ElementTree as etree
-from typing import Iterable, Optional, TextIO, Tuple, Union
+from typing import Iterable, Iterator, Optional, TextIO, Tuple, Union
 
 try:
     # python 3.8+
@@ -15,6 +15,7 @@ import bioc
 from .pubmed_tags import PUBMED_IGNORE_TAGS, PUBMED_KEEP_TAGS, PUBMED_SPLIT_TAGS
 from .utils import (
     _extract_passages,
+    _format_metadata_header,
     _remove_brackets_from_titles,
     _remove_brackets_without_words,
 )
@@ -360,3 +361,50 @@ def pubmedxml2bioc(
                 bioc_doc.add_passage(passage)
 
         yield bioc_doc
+
+
+def pubmedxml2txt(
+    source: Union[str, TextIO],
+    sections: Iterable[str] = ("title", "abstract"),
+    include_metadata: bool = False,
+    passage_separator: str = "\n\n",
+) -> Iterator[str]:
+    """
+    Convert a MEDLINE XML file into plain text, one string per article.
+
+    Args:
+        source: path to the MEDLINE xml file
+        sections: which of "title"/"abstract" to include, and in what order.
+        include_metadata: prepend a "label: value" header block (pmid, pmcid, doi, year,
+            month, day, journal, authors) before the text, separated by passage_separator
+            like any other passage. Fields that are empty/missing are omitted.
+        passage_separator: string used to join the header (if any), and every extracted
+            passage, into the single returned string.
+
+    Returns:
+        An iterator over one plain text string per article
+    """
+    for pm_doc in parse_pubmedxml(source):
+        parts = []
+        if include_metadata:
+            header = _format_metadata_header(
+                {
+                    "pmid": pm_doc["pmid"],
+                    "pmcid": pm_doc["pmcid"],
+                    "doi": pm_doc["doi"],
+                    "year": pm_doc["pub_year"],
+                    "month": pm_doc["pub_month"],
+                    "day": pm_doc["pub_day"],
+                    "journal": pm_doc["journal"],
+                    "authors": "; ".join(pm_doc["authors"]) if pm_doc["authors"] else None,
+                }
+            )
+            if header:
+                parts.append(header)
+
+        for section in sections:
+            for text_source in pm_doc[section]:
+                if text_source:
+                    parts.append(text_source)
+
+        yield passage_separator.join(parts)

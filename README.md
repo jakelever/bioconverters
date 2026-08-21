@@ -34,3 +34,13 @@ for doc in parse_pmcxml('/path/to/pmc/xml/file.xml'):
     # each passage's text may contain inline tags, e.g. "some <sup>1</sup>H text"
     ...
 ```
+
+If you just want plain text (no BioC structure), use `pmcxml2txt`/`pubmedxml2txt`, which yield one string per article - the title/abstract/body passages joined together, with an optional metadata header:
+
+```python
+from bioconverters import pmcxml2txt
+
+for text in pmcxml2txt('/path/to/pmc/xml/file.xml', include_metadata=True):
+    # text is a single string, e.g. "pmid: 123\njournal: ...\n\nTitle\n\nAbstract...\n\nBody..."
+    ...
+```
