@@ -372,6 +372,20 @@ def test_blank_bracketed_xrefs_pulls_period_over_blanked_wrapper():
     assert kept_spans == []
 
 
+def test_blank_bracketed_xrefs_avoids_double_period_after_abbreviation():
+    # "Fig." already ends in its own abbreviation period, which also happens to terminate
+    # the sentence here - pulling another period back would wrongly produce "Fig.."
+    text = 'as in Fig. (17).'
+    start = text.index('17')
+    spans = [(start, len('17'), 'xref', {'ref-type': 'fig'})]
+
+    new_text, kept_spans = _blank_bracketed_xrefs(text, spans)
+
+    assert len(new_text) == len(text)
+    assert _collapse_whitespace(new_text) == 'as in Fig.'
+    assert kept_spans == []
+
+
 def test_blank_bracketed_xrefs_keeps_own_bracketed_content_now_handled_by_clean_numeric_citations():
     # own-content-bracketed xrefs are no longer this function's job - that's _clean_numeric_citations
     text = 'Results were reported previously [1].'

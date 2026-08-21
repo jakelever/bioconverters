@@ -93,6 +93,11 @@ def _pull_period_over_trailing_separators(text: str, blanked_starts: list) -> st
     so a later whitespace collapse doesn't leave a dangling "word , ." or "word ." behind. Left
     alone if the run doesn't lead directly to a period (e.g. more prose follows, or the citation
     isn't the last one in a run - the next blanked span's own start position handles that one).
+
+    If the word right before the run already ends in its own period (an abbreviation like
+    "Fig." or "et al."), that period is left to stand alone as the sentence-ender instead of
+    inserting a second one - e.g. "Fig.     ." -> "Fig.       ", not "Fig..      ".
+
     Preserves length so no span-offset adjustment is needed.
     """
     for start in blanked_starts:
@@ -100,7 +105,9 @@ def _pull_period_over_trailing_separators(text: str, blanked_starts: list) -> st
         match = re.match(r"[\s,]+\.", text[prefix_end:])
         if match:
             match_len = len(match.group(0))
-            text = text[:prefix_end] + "." + " " * (match_len - 1) + text[prefix_end + match_len:]
+            already_ends_in_period = prefix_end > 0 and text[prefix_end - 1] == "."
+            replacement = " " * match_len if already_ends_in_period else "." + " " * (match_len - 1)
+            text = text[:prefix_end] + replacement + text[prefix_end + match_len:]
     return text
 
 
