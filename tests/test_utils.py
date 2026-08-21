@@ -3,7 +3,7 @@ import xml.etree.ElementTree as etree
 
 import pytest
 
-from bioconverters.pmc_tags import PMC_IGNORE_TAGS, PMC_KEEP_TAGS, PMC_SPLIT_TAGS
+from bioconverters.pmc_constants import PMC_IGNORE_TAGS, PMC_KEEP_TAGS, PMC_SPLIT_TAGS
 from bioconverters.utils import (
     _blank_parenthetical_xrefs,
     _extract_passages,

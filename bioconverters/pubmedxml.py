@@ -12,7 +12,7 @@ except ImportError:
 
 import bioc
 
-from .pubmed_tags import PUBMED_IGNORE_TAGS, PUBMED_KEEP_TAGS, PUBMED_SPLIT_TAGS
+from .pubmed_constants import PUBMED_IGNORE_TAGS, PUBMED_KEEP_TAGS, PUBMED_SPLIT_TAGS
 from .utils import (
     _extract_passages,
     _format_metadata_header,

@@ -1,7 +1,7 @@
-from bioconverters.pmc_tags import PMC_IGNORE_TAGS, PMC_KEEP_TAGS, PMC_SPLIT_TAGS
+from bioconverters.pmc_constants import PMC_IGNORE_TAGS, PMC_KEEP_TAGS, PMC_SPLIT_TAGS
 
 
-class TestPmcTags:
+class TestPmcConstants:
     def test_ignore_tags(self):
         assert 'table' in PMC_IGNORE_TAGS
         assert 'table-wrap' in PMC_IGNORE_TAGS

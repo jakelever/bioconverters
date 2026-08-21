@@ -12,7 +12,12 @@ except ImportError:
 
 import bioc
 
-from .pmc_tags import PMC_RECOGNIZED_SUBSECTION_HEADINGS, PMC_IGNORE_TAGS, PMC_KEEP_TAGS, PMC_SPLIT_TAGS
+from .pmc_constants import (
+    PMC_IGNORE_TAGS,
+    PMC_KEEP_TAGS,
+    PMC_RECOGNIZED_SUBSECTION_HEADINGS,
+    PMC_SPLIT_TAGS,
+)
 from .utils import _extract_passages, _format_metadata_header, _remove_brackets_from_titles
 
 _MONTH_NAME_TO_NUMBER = {m: i for i, m in enumerate(calendar.month_name)}
