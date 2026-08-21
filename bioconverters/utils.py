@@ -148,6 +148,7 @@ def _clean_numeric_citations(text: str, spans: list) -> tuple:
     """
     new_text = text
     kept_spans = []
+    removed_xref_starts = []
 
     for start, length, tag, attrib in spans:
         if tag != "xref" or attrib.get("ref-type") != "bibr":
@@ -159,9 +160,16 @@ def _clean_numeric_citations(text: str, spans: list) -> tuple:
 
         if _CITATION_NUMBER_RE.match(xref_text):
             new_text = new_text[:start] + " " * length + new_text[end:]
+            removed_xref_starts.append(start)
             continue
 
         kept_spans.append((start, length, tag, attrib))
+
+    for start in removed_xref_starts:
+        collapsable_regex =  re.match(r'[\s,]\.',new_text[start:])
+        if collapsable_regex:
+            length = len(collapsable_regex.group(0))
+            new_text = new_text[:start] + "." + ' '*(length-1) + new_text[start + length:]
 
     return new_text, kept_spans
 
