@@ -60,13 +60,17 @@ def test_inject_citations_adds_pmid_doi_attributes():
     docs = list(parse_pmcxml(StringIO(_CITATION_XML)))
     text = ' '.join(p['text'] for p in docs[0]['text_sources']['article'])
 
-    # single-rid citation gets retagged to <citation> with its pmid/doi attributes
+    # single-rid citation gets retagged to <citation> with its pmid/doi attributes, and a
+    # count of 1
     assert 'pmid="111"' in text
     assert 'doi="10.1/one"' in text
+    assert 'count="1"' in text
     assert '>1</citation>' in text
 
-    # multi-rid (grouped) citation merges values from each referenced ref, "|"-joined
+    # multi-rid (grouped) citation merges values from each referenced ref, "|"-joined, and
+    # counts how many rids were bundled together
     assert 'pmid="222|333"' in text
+    assert 'count="2"' in text
     assert '>2,3</citation>' in text
 
     # non-bibr xrefs (e.g. figure references) are unaffected by citation injection - they
@@ -253,7 +257,7 @@ def test_citation_lookup_skips_unidentifiable_refs():
     text = ' '.join(p['text'] for p in docs[0]['text_sources']['article'])
     # r2 gets retagged (ref-type="bibr") but has no pmid/doi attribute added, since nothing
     # in its ref-list entry was usable
-    assert '<citation ref-type="bibr" rid="r2">a</citation>' in text
+    assert '<citation ref-type="bibr" rid="r2" count="1">a</citation>' in text
     # r3, a normal ref, is unaffected by r2's edge cases
     assert 'pmid="333"' in text
 

@@ -92,7 +92,9 @@ def _inject_citations(article_elem, citation_lookup) -> None:
     For every in-text <xref ref-type="bibr"> citation, look up its pub-id values (e.g.
     pmid, doi) by rid and set them as attributes directly on the element. Handles xrefs
     referencing multiple ids (space-separated rid, e.g. a grouped "[1,2,3]" citation) by
-    joining multiple found values for the same pub-id-type with "|". Retags matching
+    joining multiple found values for the same pub-id-type with "|", and sets a "count"
+    attribute to the number of rids bundled in the xref, so a grouped citation is easy to
+    identify without having to split the "|"-joined values yourself. Retags matching
     elements to "citation" (from "xref") so they can be selectively kept - with their now-
     enriched attributes - separately from other xref types (e.g. figure/table references),
     which stay dropped as before.
@@ -111,6 +113,7 @@ def _inject_citations(article_elem, citation_lookup) -> None:
                 merged.setdefault(pub_id_type, []).append(value)
         for pub_id_type, values in merged.items():
             xref.set(pub_id_type, "|".join(values))
+        xref.set("count", str(len(rids)))
         xref.tag = _CITATION_TAG
 
 
@@ -375,8 +378,10 @@ def parse_pmcxml(
             to avoid issues with buggy sentences in some PMC articles.
         inject_citations: for each in-text <xref ref-type="bibr"> citation, look up its
             referenced <ref>'s pub-id values (e.g. pmid, doi) and add them as attributes,
-            retagged to <citation>, e.g. <citation pmid="12345678">1</citation>. These are
-            then kept in the output (with the citation marker text visible) instead of
+            retagged to <citation>, e.g. <citation pmid="12345678" count="1">1</citation>.
+            A grouped citation (e.g. "[2,3]") gets its values "|"-joined and count="2",
+            so callers can tell it's bundled without splitting the values themselves. These
+            are then kept in the output (with the citation marker text visible) instead of
             being dropped like other ignored tags - this affects return_xml=False output
             too, since the citation marker text is no longer blanked (though the injected
             attributes themselves don't survive being stripped down to plain text).
