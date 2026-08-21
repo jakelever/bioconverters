@@ -2,13 +2,7 @@ import calendar
 import html
 import re
 import xml.etree.ElementTree as etree
-from typing import Iterable, Iterator, Optional, TextIO, Tuple, Union
-
-try:
-    # python 3.8+
-    from typing import TypedDict  # type: ignore
-except ImportError:  # pragma: no cover - only exercised on Python <3.8
-    from typing_extensions import TypedDict
+from typing import Iterable, Iterator, Optional, TextIO, Tuple, TypedDict, Union
 
 import bioc
 
