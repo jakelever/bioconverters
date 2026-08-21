@@ -60,7 +60,7 @@ for text in pmcxml2txt('/path/to/pmc.xml', include_metadata=True):
     ...
 ```
 
-Flags: `sections` (default `("title", "abstract", "article")`, also available: `subtitle`, `back`, `floating`), `include_metadata`, `passage_separator`, `trim_buggy_sentences`, `inject_citations` (see below), `clean_xrefs_in_brackets` (see below).
+Flags: `sections` (default `("title", "abstract", "article")`, also available: `subtitle`, `back`, `floating`), `include_metadata`, `passage_separator`, `trim_buggy_sentences`, `inject_citations`, `clean_citations`, `clean_xrefs_in_brackets`, `clear_empty_brackets`, `fix_exponentials` (cleanup flags described below).
 
 ### `pmcxml2bioc` - BioC documents
 
@@ -87,34 +87,51 @@ for article in parse_pmcxml('/path/to/pmc.xml'):
 `parse_pmcxml` shares its defaults with `pmcxml2txt`/`pmcxml2bioc`, so behavior is consistent regardless of entry point. Notable flags:
 - `return_xml` (default `False`) - return each passage's text as a marked-up XML string instead of plain text. Pair with `keep_tags` to control which tags survive, e.g. `"some <sup>1</sup>H text"`.
 - `keep_tags` - which tags' markup is preserved inline when `return_xml=True`. Defaults to `pmc_constants.PMC_KEEP_TAGS` (`<sup>`, `<sub>`, `<italic>`, etc).
-- `inject_citations` (default `False`) - resolve each in-text citation's `pmid`/`doi` and retag it to `<citation pmid="...">1</citation>`, kept in the output instead of dropped.
-- `clean_xrefs_in_brackets` (default `True`) - drop a reference that's wrapped in `[...]` or `(...)` on its own, since it reads as redundant clutter once cross-references are no longer blanked out - see below.
+- `inject_citations` (default `False`) - resolve each in-text citation's `pmid`/`doi` and retag it to `<citation pmid="...">1</citation>`, kept in the output instead of dropped. Can't be combined with `clean_citations`.
+- `clean_citations`, `clean_xrefs_in_brackets`, `clear_empty_brackets` (all default `True`) - see "Cleaning up text" below.
 
 ## Notes on text extraction
 
 Text is extracted using [spans_and_trees](https://github.com/jakelever/spans_and_trees). Table content is omitted from extracted text. Overly long, unbroken runs of text are automatically trimmed to a maximum length (controlled by the `trim_buggy_sentences` flag).
 
-## Cleaning up text with `clean_xrefs_in_brackets`
+## Cleaning up text
 
-The text can contain some extra apparent clutter such as cross-references in parentheses and citations in square brackets. The `clean_xrefs_in_brackets` argument (default `True`) removes both, which is a good idea for easier text processing.
+When turning PMC XML into plain text, we need to do some tidying to remove potential artefacts.
 
-Removing square brackets:
+### Removing numeric citations with `clean_citations`
+
+In-text citation markers (`<xref ref-type="bibr">`) are meaningless once printed as plain numbers, and can even glue onto the preceding word if the source XML has no separating space. The `clean_citations` argument (default `True`) blanks any bibr xref whose own text is just a number or numbers, bracketed or not (e.g. `"1"`, `"[1,2,3]"`, `"[1-3]"`), regardless of what surrounds it:
 
 ```
-before: "...preferentially the active conformation[14]. Figure 5..."
-after:  "...preferentially the active conformation . Figure 5..."
+before: "...active in tuberculosis<sup>1</sup> and other diseases..."
+after:  "...active in tuberculosis and other diseases..."
 ```
 
-Removing cross-references wrapped in parentheses or square brackets:
+An author-date citation like `"Smith et al., 2020"` is left untouched, since it's still informative without the full reference resolved. `clean_citations` can't be combined with `inject_citations` (see below) - one deletes bibr citations, the other enriches them.
+
+### Removing cross-references wrapped in parentheses with `clean_xrefs_in_brackets`
+
+A cross-reference such as a figure or table is often the sole content of a `(...)`/`[...]` wrapper, which reads as redundant clutter once it's no longer resolvable. The `clean_xrefs_in_brackets` argument (default `True`) drops the reference together with its wrapper:
 
 ```
 before: "...reported in various solid cancers (Table 1). Analogous mutations..."
 after:  "...reported in various solid cancers. Analogous mutations..."
 ```
 
-This also handles a "double-wrapped" reference, where the xref's own bracketed content sits inside a further wrapper (e.g. `"([1])"`), by dropping the whole outer wrapper rather than leaving a dangling empty `"()"` behind.
+This only fires when the reference fills the wrapper on its own and the punctuation matches on both sides (both round or both square) - a mixed reference like `"(see Table 1)"`, a grouped one like `"(Figure 7 and Table 3)"`, or mismatched punctuation like `"[Table 1)"` is left untouched.
 
-The wrapper case only fires when the xref fills it on its own and the punctuation matches on both sides (both round or both square) - a mixed reference like `"(see Table 1)"`, a grouped one like `"(Figure 7 and Table 3)"`, or mismatched punctuation like `"[Table 1)"` is left untouched, since none of those read as a bare wrapper around the reference.
+### Tidying up empty brackets with `clear_empty_brackets`
+
+Blanking out a citation or cross-reference, or dropping an unrelated tag (e.g. `<ext-link>`) that happened to sit inside parentheses, can leave an empty wrapper behind. The `clear_empty_brackets` argument (default `True`) removes any `(...)`/`[...]`/`{...}` left containing no word characters:
+
+```
+before: "...as predicted by the tool (<ext-link>miRDB</ext-link>)..."
+after:  "...as predicted by the tool..."
+```
+
+### Tidying up extra spaces
+
+Whitespace is always collapsed to single spaces, so line breaks and indentation from the source XML, as well as any spaces left behind by blanked-out content, don't show up as irregular spacing in the final text. This isn't controlled by a flag.
 
 ## Handling lost formatting
 
