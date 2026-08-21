@@ -85,17 +85,39 @@ def _trim_buggy_sentences(text: str) -> str:
 _BRACKET_PAIRS = {"(": ")", "[": "]"}
 
 
+def _pull_period_over_trailing_separators(text: str, blanked_starts: list) -> str:
+    """
+    After blanking out spans (citations/xrefs), pull a sentence-ending period back over any
+    run of leftover separator characters (spaces, commas) between the last real word and the
+    period, for each blanked span's start position - e.g. "word    ,    ." -> "word.       " -
+    so a later whitespace collapse doesn't leave a dangling "word , ." or "word ." behind. Left
+    alone if the run doesn't lead directly to a period (e.g. more prose follows, or the citation
+    isn't the last one in a run - the next blanked span's own start position handles that one).
+    Preserves length so no span-offset adjustment is needed.
+    """
+    for start in blanked_starts:
+        prefix_end = len(text[:start].rstrip())
+        match = re.match(r"[\s,]+\.", text[prefix_end:])
+        if match:
+            match_len = len(match.group(0))
+            text = text[:prefix_end] + "." + " " * (match_len - 1) + text[prefix_end + match_len:]
+    return text
+
+
 def _blank_bracketed_xrefs(text: str, spans: list) -> tuple:
     """
     Blank out an xref that's the sole content of a surrounding "(...)"/"[...]" wrapper (e.g.
     "(Table 1)"), wrapper included. Mixed ("(see Table 1)"), grouped ("(Figure 7 and Table
     3)"), or mismatched ("[Table 1)") wrappers are left untouched. (A bibr citation whose own
     content is already bracketed, e.g. "[1]", is handled separately by _clean_numeric_citations,
-    which runs first - by the time this runs, such spans are already blanked and gone.)
+    which runs first - by the time this runs, such spans are already blanked and gone.) A
+    wrapper left directly before a sentence-ending period (e.g. "survivorship (Smith, 2020).")
+    has that period pulled back over the gap - see _pull_period_over_trailing_separators.
     Preserves length so no span-offset adjustment is needed.
     """
     new_text = text
     kept_spans = []
+    blanked_starts = []
 
     for start, length, tag, attrib in spans:
         if tag != "xref":
@@ -122,9 +144,12 @@ def _blank_bracketed_xrefs(text: str, spans: list) -> tuple:
         if context_bracketed:
             blank_start, blank_end = before_idx, after_idx + 1
             new_text = new_text[:blank_start] + " " * (blank_end - blank_start) + new_text[blank_end:]
+            blanked_starts.append(blank_start)
             continue
 
         kept_spans.append((start, length, tag, attrib))
+
+    new_text = _pull_period_over_trailing_separators(new_text, blanked_starts)
 
     return new_text, kept_spans
 
@@ -140,7 +165,9 @@ def _clean_numeric_citations(text: str, spans: list) -> tuple:
     surrounding context is required: this is what catches a citation marker glued directly
     onto a word with no separating space at all (e.g. "tuberculosis<xref><sup>1</sup>
     </xref>" -> "tuberculosis1" if left unblanked), which can't be detected by looking at
-    context since there isn't any.
+    context since there isn't any. A citation (or run of citations) left directly before a
+    sentence-ending period (e.g. "high [1], [2].") has that period pulled back over the gap -
+    see _pull_period_over_trailing_separators.
 
     An author-date citation (e.g. "Smith et al., 2020") isn't purely numeric, so it's left
     untouched - unlike a bare reference number, it's still informative without the full
@@ -148,7 +175,7 @@ def _clean_numeric_citations(text: str, spans: list) -> tuple:
     """
     new_text = text
     kept_spans = []
-    removed_xref_starts = []
+    blanked_starts = []
 
     for start, length, tag, attrib in spans:
         if tag != "xref" or attrib.get("ref-type") != "bibr":
@@ -160,16 +187,12 @@ def _clean_numeric_citations(text: str, spans: list) -> tuple:
 
         if _CITATION_NUMBER_RE.match(xref_text):
             new_text = new_text[:start] + " " * length + new_text[end:]
-            removed_xref_starts.append(start)
+            blanked_starts.append(start)
             continue
 
         kept_spans.append((start, length, tag, attrib))
 
-    for start in removed_xref_starts:
-        collapsable_regex =  re.match(r'[\s,]\.',new_text[start:])
-        if collapsable_regex:
-            length = len(collapsable_regex.group(0))
-            new_text = new_text[:start] + "." + ' '*(length-1) + new_text[start + length:]
+    new_text = _pull_period_over_trailing_separators(new_text, blanked_starts)
 
     return new_text, kept_spans
 

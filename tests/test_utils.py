@@ -7,6 +7,7 @@ from bioconverters.pmc_constants import PMC_IGNORE_TAGS, PMC_KEEP_TAGS, PMC_SPLI
 from bioconverters.utils import (
     _blank_bracketed_xrefs,
     _clean_numeric_citations,
+    _collapse_whitespace,
     _extract_passages,
     _fix_exponentials,
     _remove_brackets_from_titles,
@@ -294,7 +295,8 @@ def test_blank_bracketed_xrefs_keeps_mismatched_surrounding_punctuation():
 
 def test_blank_bracketed_xrefs_drops_double_wrapped_reference():
     # the xref's own content is already "[1]", and that's further wrapped in "(...)" - the
-    # whole outer range is blanked so no dangling empty "()" is left behind
+    # whole outer range is blanked so no dangling empty "()" is left behind. It's also
+    # directly followed by the sentence-ending period, so that gets pulled back too.
     text = 'As reported previously ([1]).'
     start = text.index('[1]')
     spans = [(start, len('[1]'), 'xref', {})]
@@ -302,7 +304,7 @@ def test_blank_bracketed_xrefs_drops_double_wrapped_reference():
     new_text, kept_spans = _blank_bracketed_xrefs(text, spans)
 
     assert len(new_text) == len(text)
-    assert new_text == text.replace('([1])', ' ' * len('([1])'))
+    assert _collapse_whitespace(new_text) == 'As reported previously.'
     assert kept_spans == []
 
 
@@ -313,7 +315,8 @@ def test_blank_bracketed_xrefs_drops_double_wrapped_reference_in_square_brackets
 
     new_text, kept_spans = _blank_bracketed_xrefs(text, spans)
 
-    assert new_text == text.replace('[[1]]', ' ' * len('[[1]]'))
+    assert len(new_text) == len(text)
+    assert _collapse_whitespace(new_text) == 'As reported previously.'
     assert kept_spans == []
 
 
@@ -352,6 +355,21 @@ def test_blank_bracketed_xrefs_passes_through_non_xref_spans():
 
     assert new_text == text
     assert kept_spans == spans
+
+
+def test_blank_bracketed_xrefs_pulls_period_over_blanked_wrapper():
+    # a wrapper directly before a sentence-ending period (common for author-date citations,
+    # which _clean_numeric_citations doesn't touch) would otherwise leave a dangling
+    # "survivorship ." behind once the wrapper is blanked and whitespace collapses
+    text = 'wellbeing during early survivorship (Adalbe et al., 2024).'
+    start = text.index('Adalbe')
+    spans = [(start, len('Adalbe et al., 2024'), 'xref', {'ref-type': 'bibr'})]
+
+    new_text, kept_spans = _blank_bracketed_xrefs(text, spans)
+
+    assert len(new_text) == len(text)
+    assert _collapse_whitespace(new_text) == 'wellbeing during early survivorship.'
+    assert kept_spans == []
 
 
 def test_blank_bracketed_xrefs_keeps_own_bracketed_content_now_handled_by_clean_numeric_citations():
@@ -401,6 +419,9 @@ def test_fix_exponentials_handles_multiple_occurrences():
 
 
 def test_clean_numeric_citations_drops_bare_numeric_citation():
+    # directly before a sentence-ending period, so it gets pulled back too - see
+    # test_clean_numeric_citations_leaves_non_terminal_bare_citation_space_alone for the
+    # mid-sentence case, where blanking alone (no pulled-back period) is all that's expected
     text = 'Results were reported previously 1.'
     start = text.index('1.')
     spans = [(start, 1, 'xref', {'ref-type': 'bibr'})]
@@ -408,7 +429,7 @@ def test_clean_numeric_citations_drops_bare_numeric_citation():
     new_text, kept_spans = _clean_numeric_citations(text, spans)
 
     assert len(new_text) == len(text)
-    assert new_text == 'Results were reported previously  .'
+    assert _collapse_whitespace(new_text) == 'Results were reported previously.'
     assert kept_spans == []
 
 
@@ -420,7 +441,7 @@ def test_clean_numeric_citations_drops_bracketed_numeric_citation():
     new_text, kept_spans = _clean_numeric_citations(text, spans)
 
     assert len(new_text) == len(text)
-    assert new_text == 'Results were reported previously    .'
+    assert _collapse_whitespace(new_text) == 'Results were reported previously.'
     assert kept_spans == []
 
 
@@ -432,7 +453,7 @@ def test_clean_numeric_citations_drops_bracketed_multiple_ids():
     new_text, kept_spans = _clean_numeric_citations(text, spans)
 
     assert len(new_text) == len(text)
-    assert new_text == text.replace('[1,2,3]', ' ' * len('[1,2,3]'))
+    assert _collapse_whitespace(new_text) == 'As shown before.'
     assert kept_spans == []
 
 
@@ -443,7 +464,40 @@ def test_clean_numeric_citations_drops_ranged_citation():
 
     new_text, kept_spans = _clean_numeric_citations(text, spans)
 
-    assert new_text == text.replace('[1-3]', ' ' * len('[1-3]'))
+    assert len(new_text) == len(text)
+    assert _collapse_whitespace(new_text) == 'As shown before.'
+    assert kept_spans == []
+
+
+def test_clean_numeric_citations_pulls_period_over_multiple_citations():
+    # two separate citation xrefs joined by a literal ", " in the surrounding text - each
+    # xref's own brackets are its own content, so blanking them alone would leave "high , ."
+    text = 'burden remains high [1], [2].'
+    first = text.index('[1]')
+    second = text.index('[2]')
+    spans = [
+        (first, len('[1]'), 'xref', {'ref-type': 'bibr'}),
+        (second, len('[2]'), 'xref', {'ref-type': 'bibr'}),
+    ]
+
+    new_text, kept_spans = _clean_numeric_citations(text, spans)
+
+    assert len(new_text) == len(text)
+    assert _collapse_whitespace(new_text) == 'burden remains high.'
+    assert kept_spans == []
+
+
+def test_clean_numeric_citations_leaves_non_terminal_bare_citation_space_alone():
+    # the citation isn't the last thing before a period - more prose follows, so there's no
+    # run of separators leading directly to a period to pull back over
+    text = 'shown [1] previously.'
+    start = text.index('[1]')
+    spans = [(start, len('[1]'), 'xref', {'ref-type': 'bibr'})]
+
+    new_text, kept_spans = _clean_numeric_citations(text, spans)
+
+    assert len(new_text) == len(text)
+    assert new_text == 'shown     previously.'
     assert kept_spans == []
 
 

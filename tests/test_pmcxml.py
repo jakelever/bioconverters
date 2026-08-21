@@ -181,8 +181,10 @@ def test_clean_numeric_citations_default_drops_own_content_in_square_brackets():
     # context (no parentheses needed, unlike the "(Table 1)" case)
     docs = list(parse_pmcxml(StringIO(_SQUARE_BRACKET_XREF_XML), inject_citations=False))
     text = ' '.join(p['text'] for p in docs[0]['text_sources']['article'])
-    # collapsed whitespace leaves a single space where "[1]" used to be
-    assert 'reported previously .' in text
+    # the citation sits directly before a sentence-ending period, so that period is pulled
+    # back over the gap rather than leaving a dangling "previously ."
+    assert 'reported previously.' in text
+    assert 'reported previously .' not in text
     assert 'Figure 1' in text  # unrelated, unbracketed xref still survives
 
 
