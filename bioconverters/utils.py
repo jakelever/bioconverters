@@ -12,6 +12,7 @@ from spans_and_trees import spans_to_passages, spans_to_tree, tree_to_spans
 def _remove_brackets_without_words(text: str) -> str:
     changed = True
     previous_text = text
+    fixed = text
     while changed:
         fixed = re.sub(r"\([^\w\t]*\)", "", previous_text)
         fixed = re.sub(r"\[[^\w\t]*\]", "", fixed)

@@ -28,13 +28,13 @@ _MONTH_NAME_TO_NUMBER.update({m: i for i, m in enumerate(calendar.month_abbr)})
 
 class PubMedArticle(TypedDict):
     pmid: str
-    pmcid: str
-    doi: str
+    pmcid: Optional[str]
+    doi: Optional[str]
     pub_year: Optional[int]
     pub_month: Optional[int]
     pub_day: Optional[int]
     title: Iterable[str]
-    abstract: str
+    abstract: Iterable[str]
     journal: str
     journal_iso: str
     authors: Iterable[str]
@@ -64,11 +64,12 @@ def _get_journal_date_for_medline_file(elem: etree.Element, pmid: Union[str, int
     pub_date_field_day = pub_date_field.find("./Day")
 
     pub_year, pub_month, pub_day = None, None, None
-    if medline_date_field is not None:
-        regex_search = re.search(year_regex, medline_date_field.text)
+    if medline_date_field is not None and medline_date_field.text:
+        medline_date_text = medline_date_field.text
+        regex_search = re.search(year_regex, medline_date_text)
         if regex_search:
             pub_year = regex_search.group()
-        month_search = [c for c in _MONTH_NAME_TO_NUMBER if c and c in medline_date_field.text]
+        month_search = [c for c in _MONTH_NAME_TO_NUMBER if c and c in medline_date_text]
         if len(month_search) > 0:
             pub_month = month_search[0]
     else:
@@ -102,6 +103,16 @@ def _get_pubmed_entry_date(elem: etree.Element) -> _DateTuple:
         pub_date_field_year = pub_date_field.find("./Year")
         pub_date_field_month = pub_date_field.find("./Month")
         pub_date_field_day = pub_date_field.find("./Day")
+        if (
+            pub_date_field_year is None
+            or pub_date_field_month is None
+            or pub_date_field_day is None
+            or pub_date_field_year.text is None
+            or pub_date_field_month.text is None
+            or pub_date_field_day.text is None
+        ):
+            # Skip malformed/incomplete PubMedPubDate entries rather than crashing
+            continue
         pub_year = int(pub_date_field_year.text)
         pub_month = int(pub_date_field_month.text)
         pub_day = int(pub_date_field_day.text)

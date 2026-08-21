@@ -2,7 +2,7 @@ import calendar
 import io
 import re
 import xml.etree.ElementTree as etree
-from typing import Iterable, Iterator, Optional, TextIO, Union
+from typing import Dict, Iterable, Iterator, List, Optional, TextIO, Union, cast
 
 try:
     # python 3.8+
@@ -127,7 +127,7 @@ def _assign_subsections(text_sources: TextSource) -> None:
     Matches against the passage's tag-stripped text, since a heading might have keep_tags
     markup embedded (e.g. an italicized word) that would otherwise prevent an exact match.
     """
-    for passages in text_sources.values():
+    for passages in cast(Dict[str, List[dict]], text_sources).values():
         subsection = None
         for passage in passages:
             plain_text = _TAG_RE.sub("", passage["text"])
@@ -271,7 +271,7 @@ def _get_meta_info_for_pmc_article(article_elem) -> PmcMeta:
     )
     pub_year, pub_month, pub_day = None, None, None
     if pubdates:
-        most_complete, completeness = None, 0
+        most_complete, completeness = (None, None, None), -1
         for pubdate in pubdates:
             year_value = _field_text(pubdate, "year")
             if year_value is not None:
@@ -348,12 +348,14 @@ def _apply_pmc_xlink_fix(source: Union[str, TextIO]) -> TextIO:
         content = source.read()
 
     if 'xlink' in content:
-        article_tag = re.search(r'<article.*?>', content).group()
-        if 'xmlns:xlink=' not in article_tag:
-            new_article_tag = article_tag.replace(
-                '<article ', '<article xmlns:xlink="http://www.w3.org/1999/xlink" ', 1
-            )
-            content = content.replace(article_tag, new_article_tag, 1)
+        article_tag_match = re.search(r'<article.*?>', content)
+        if article_tag_match:
+            article_tag = article_tag_match.group()
+            if 'xmlns:xlink=' not in article_tag:
+                new_article_tag = article_tag.replace(
+                    '<article ', '<article xmlns:xlink="http://www.w3.org/1999/xlink" ', 1
+                )
+                content = content.replace(article_tag, new_article_tag, 1)
 
     return io.StringIO(content)
 
@@ -443,7 +445,7 @@ def parse_pmcxml(
 
 def pmcxml2bioc(
     source: Union[str, TextIO],
-) -> Iterator[Iterable[bioc.BioCDocument]]:
+) -> Iterator[bioc.BioCDocument]:
     """
     Convert a PMC XML file into its Bioc equivalent
 
@@ -475,7 +477,8 @@ def pmcxml2bioc(
             bioc_doc.infons["journal_iso"] = pmc_doc["journal_iso"]
 
             offset = 0
-            for group_name, text_source_group in pmc_doc["text_sources"].items():
+            text_source_groups = cast(Dict[str, List[dict]], pmc_doc["text_sources"])
+            for group_name, text_source_group in text_source_groups.items():
                 for passage_dict in text_source_group:
                     text_source = passage_dict["text"]
 
