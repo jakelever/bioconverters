@@ -53,7 +53,7 @@ def _extract_pmc_passages(
     return_xml,
     trim_buggy_sentences,
     inject_citations,
-    clean_citations,
+    clean_numeric_citations,
     clean_xrefs_in_brackets,
     clear_empty_brackets,
     fix_exponentials,
@@ -70,7 +70,7 @@ def _extract_pmc_passages(
         effective_keep_tags,
         return_xml,
         trim_buggy_sentences,
-        clean_citations,
+        clean_numeric_citations,
         clean_xrefs_in_brackets,
         clear_empty_brackets,
         fix_exponentials,
@@ -146,7 +146,7 @@ def _extract_article_content(
     return_xml,
     trim_buggy_sentences,
     inject_citations,
-    clean_citations,
+    clean_numeric_citations,
     clean_xrefs_in_brackets,
     clear_empty_brackets,
     fix_exponentials,
@@ -171,7 +171,7 @@ def _extract_article_content(
             return_xml,
             trim_buggy_sentences,
             inject_citations,
-            clean_citations,
+            clean_numeric_citations,
             clean_xrefs_in_brackets,
             clear_empty_brackets,
             fix_exponentials,
@@ -185,7 +185,7 @@ def _extract_article_content(
             return_xml,
             trim_buggy_sentences,
             inject_citations,
-            clean_citations,
+            clean_numeric_citations,
             clean_xrefs_in_brackets,
             clear_empty_brackets,
             fix_exponentials,
@@ -208,7 +208,7 @@ def _extract_article_content(
                 return_xml,
                 trim_buggy_sentences,
                 inject_citations,
-                clean_citations,
+                clean_numeric_citations,
                 clean_xrefs_in_brackets,
                 clear_empty_brackets,
                 fix_exponentials,
@@ -223,7 +223,7 @@ def _extract_article_content(
                 return_xml,
                 trim_buggy_sentences,
                 inject_citations,
-                clean_citations,
+                clean_numeric_citations,
                 clean_xrefs_in_brackets,
                 clear_empty_brackets,
                 fix_exponentials,
@@ -237,7 +237,7 @@ def _extract_article_content(
                 return_xml,
                 trim_buggy_sentences,
                 inject_citations,
-                clean_citations,
+                clean_numeric_citations,
                 clean_xrefs_in_brackets,
                 clear_empty_brackets,
                 fix_exponentials,
@@ -251,7 +251,7 @@ def _extract_article_content(
                 return_xml,
                 trim_buggy_sentences,
                 inject_citations,
-                clean_citations,
+                clean_numeric_citations,
                 clean_xrefs_in_brackets,
                 clear_empty_brackets,
                 fix_exponentials,
@@ -334,7 +334,7 @@ def _get_meta_info_for_pmc_article(article_elem) -> PmcMeta:
             return_xml=False,
             trim_buggy_sentences=True,
             inject_citations=False,
-            clean_citations=False,
+            clean_numeric_citations=False,
             clean_xrefs_in_brackets=False,
             clear_empty_brackets=False,
             fix_exponentials=False,
@@ -393,7 +393,7 @@ def parse_pmcxml(
     return_xml: bool = False,
     trim_buggy_sentences: bool = True,
     inject_citations: bool = False,
-    clean_citations: bool = True,
+    clean_numeric_citations: bool = True,
     clean_xrefs_in_brackets: bool = True,
     clear_empty_brackets: bool = True,
     fix_exponentials: bool = True,
@@ -411,15 +411,15 @@ def parse_pmcxml(
             to avoid issues with buggy sentences in some PMC articles.
         inject_citations: resolve each in-text bibr citation's pmid/doi and retag it to
             <citation>, kept in the output instead of dropped (see _inject_citations). Must
-            not be combined with clean_citations=True - injection enriches bibr citations,
-            clean_citations deletes them, so having both on is almost certainly a mistake.
-        clean_citations: drop a numeric bibr citation marker outright, e.g. "1", "[1,2]",
+            not be combined with clean_numeric_citations=True - injection enriches bibr citations,
+            clean_numeric_citations deletes them, so having both on is almost certainly a mistake.
+        clean_numeric_citations: drop a numeric bibr citation marker outright, e.g. "1", "[1,2]",
             regardless of context - this is what catches a citation glued directly onto a
-            word with no separating space at all (see _clean_citations).
+            word with no separating space at all (see _clean_numeric_citations).
         clean_xrefs_in_brackets: drop bracket-wrapped xref clutter, e.g. "(Table 1)" (see
             _blank_bracketed_xrefs).
         clear_empty_brackets: remove any "(...)"/"[...]"/"{...}" left containing no word
-            characters, e.g. from clean_citations/clean_xrefs_in_brackets, or from an
+            characters, e.g. from clean_numeric_citations/clean_xrefs_in_brackets, or from an
             unrelated ignore_tag (like ext-link) that happened to be parenthesised (see
             _remove_brackets_without_words).
         fix_exponentials: with return_xml=False, recover a digit-preceded numeric "<sup>"
@@ -429,9 +429,9 @@ def parse_pmcxml(
     These defaults match pmcxml2bioc/pmcxml2txt, so behavior is consistent regardless of
     which entry point is used.
     """
-    assert not (inject_citations and clean_citations), (
-        "inject_citations and clean_citations can't both be True - injection enriches bibr "
-        "citations, clean_citations deletes them. Pass clean_citations=False."
+    assert not (inject_citations and clean_numeric_citations), (
+        "inject_citations and clean_numeric_citations can't both be True - injection enriches bibr "
+        "citations, clean_numeric_citations deletes them. Pass clean_numeric_citations=False."
     )
 
     source = _apply_pmc_xlink_fix(source)
@@ -475,7 +475,7 @@ def parse_pmcxml(
                     return_xml,
                     trim_buggy_sentences,
                     inject_citations,
-                    clean_citations,
+                    clean_numeric_citations,
                     clean_xrefs_in_brackets,
                     clear_empty_brackets,
                     fix_exponentials,
@@ -489,7 +489,7 @@ def parse_pmcxml(
 
 def pmcxml2bioc(
     source: Union[str, TextIO],
-    clean_citations: bool = True,
+    clean_numeric_citations: bool = True,
     clear_empty_brackets: bool = True,
     fix_exponentials: bool = True,
 ) -> Iterator[bioc.BioCDocument]:
@@ -498,7 +498,7 @@ def pmcxml2bioc(
 
     Args:
         source: The text or file handle containing the PMC XML
-        clean_citations: see parse_pmcxml.
+        clean_numeric_citations: see parse_pmcxml.
         clear_empty_brackets: see parse_pmcxml.
         fix_exponentials: see parse_pmcxml.
 
@@ -514,7 +514,7 @@ def pmcxml2bioc(
             keep_tags=set(),
             return_xml=False,
             inject_citations=False,
-            clean_citations=clean_citations,
+            clean_numeric_citations=clean_numeric_citations,
             clear_empty_brackets=clear_empty_brackets,
             fix_exponentials=fix_exponentials,
         ):
@@ -562,7 +562,7 @@ def pmcxml2txt(
     passage_separator: str = "\n\n",
     trim_buggy_sentences: bool = True,
     inject_citations: bool = False,
-    clean_citations: bool = True,
+    clean_numeric_citations: bool = True,
     clean_xrefs_in_brackets: bool = True,
     clear_empty_brackets: bool = True,
     fix_exponentials: bool = True,
@@ -583,8 +583,8 @@ def pmcxml2txt(
             to avoid issues with buggy sentences in some PMC articles.
         inject_citations: see parse_pmcxml - plain text output can't show the injected
             pmid/doi attributes anyway, so there's no upside to paying for the ref-list
-            lookup unless you turn this on. Must not be combined with clean_citations=True.
-        clean_citations: see parse_pmcxml.
+            lookup unless you turn this on. Must not be combined with clean_numeric_citations=True.
+        clean_numeric_citations: see parse_pmcxml.
         clean_xrefs_in_brackets: see parse_pmcxml.
         clear_empty_brackets: see parse_pmcxml.
         fix_exponentials: see parse_pmcxml.
@@ -598,7 +598,7 @@ def pmcxml2txt(
         return_xml=False,
         trim_buggy_sentences=trim_buggy_sentences,
         inject_citations=inject_citations,
-        clean_citations=clean_citations,
+        clean_numeric_citations=clean_numeric_citations,
         clean_xrefs_in_brackets=clean_xrefs_in_brackets,
         clear_empty_brackets=clear_empty_brackets,
         fix_exponentials=fix_exponentials,

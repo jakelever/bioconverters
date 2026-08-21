@@ -60,7 +60,7 @@ for text in pmcxml2txt('/path/to/pmc.xml', include_metadata=True):
     ...
 ```
 
-Flags: `sections` (default `("title", "abstract", "article")`, also available: `subtitle`, `back`, `floating`), `include_metadata`, `passage_separator`, `trim_buggy_sentences`, `inject_citations`, `clean_citations`, `clean_xrefs_in_brackets`, `clear_empty_brackets`, `fix_exponentials` (cleanup flags described below).
+Flags: `sections` (default `("title", "abstract", "article")`, also available: `subtitle`, `back`, `floating`), `include_metadata`, `passage_separator`, `trim_buggy_sentences`, `inject_citations`, `clean_numeric_citations`, `clean_xrefs_in_brackets`, `clear_empty_brackets`, `fix_exponentials` (cleanup flags described below).
 
 ### `pmcxml2bioc` - BioC documents
 
@@ -87,8 +87,8 @@ for article in parse_pmcxml('/path/to/pmc.xml'):
 `parse_pmcxml` shares its defaults with `pmcxml2txt`/`pmcxml2bioc`, so behavior is consistent regardless of entry point. Notable flags:
 - `return_xml` (default `False`) - return each passage's text as a marked-up XML string instead of plain text. Pair with `keep_tags` to control which tags survive, e.g. `"some <sup>1</sup>H text"`.
 - `keep_tags` - which tags' markup is preserved inline when `return_xml=True`. Defaults to `pmc_constants.PMC_KEEP_TAGS` (`<sup>`, `<sub>`, `<italic>`, etc).
-- `inject_citations` (default `False`) - resolve each in-text citation's `pmid`/`doi` and retag it to `<citation pmid="...">1</citation>`, kept in the output instead of dropped. Can't be combined with `clean_citations`.
-- `clean_citations`, `clean_xrefs_in_brackets`, `clear_empty_brackets` (all default `True`) - see "Cleaning up text" below.
+- `inject_citations` (default `False`) - resolve each in-text citation's `pmid`/`doi` and retag it to `<citation pmid="...">1</citation>`, kept in the output instead of dropped. Can't be combined with `clean_numeric_citations`.
+- `clean_numeric_citations`, `clean_xrefs_in_brackets`, `clear_empty_brackets` (all default `True`) - see "Cleaning up text" below.
 
 ## Notes on text extraction
 
@@ -98,16 +98,16 @@ Text is extracted using [spans_and_trees](https://github.com/jakelever/spans_and
 
 When turning PMC XML into plain text, we need to do some tidying to remove potential artefacts.
 
-### Removing numeric citations with `clean_citations`
+### Removing numeric citations with `clean_numeric_citations`
 
-In-text citation markers (`<xref ref-type="bibr">`) are meaningless once printed as plain numbers, and can even glue onto the preceding word if the source XML has no separating space. The `clean_citations` argument (default `True`) blanks any bibr xref whose own text is just a number or numbers, bracketed or not (e.g. `"1"`, `"[1,2,3]"`, `"[1-3]"`), regardless of what surrounds it:
+In-text citation markers (`<xref ref-type="bibr">`) are meaningless once printed as plain numbers, and can even glue onto the preceding word if the source XML has no separating space. The `clean_numeric_citations` argument (default `True`) blanks any bibr xref whose own text is just a number or numbers, bracketed or not (e.g. `"1"`, `"[1,2,3]"`, `"[1-3]"`), regardless of what surrounds it:
 
 ```
 before: "...active in tuberculosis<sup>1</sup> and other diseases..."
 after:  "...active in tuberculosis and other diseases..."
 ```
 
-An author-date citation like `"Smith et al., 2020"` is left untouched, since it's still informative without the full reference resolved. `clean_citations` can't be combined with `inject_citations` (see below) - one deletes bibr citations, the other enriches them.
+An author-date citation like `"Smith et al., 2020"` is left untouched, since it's still informative without the full reference resolved. `clean_numeric_citations` can't be combined with `inject_citations` (see below) - one deletes bibr citations, the other enriches them.
 
 ### Removing cross-references wrapped in parentheses with `clean_xrefs_in_brackets`
 

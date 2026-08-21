@@ -61,7 +61,7 @@ def test_inject_citations_adds_pmid_doi_attributes():
         parse_pmcxml(
             StringIO(_CITATION_XML),
             inject_citations=True,
-            clean_citations=False,
+            clean_numeric_citations=False,
             return_xml=True,
         )
     )
@@ -90,9 +90,9 @@ def test_inject_citations_adds_pmid_doi_attributes():
     assert '<xref' not in text
 
 
-def test_inject_citations_and_clean_citations_together_raises():
+def test_inject_citations_and_clean_numeric_citations_together_raises():
     with pytest.raises(AssertionError):
-        list(parse_pmcxml(StringIO(_CITATION_XML), inject_citations=True, clean_citations=True))
+        list(parse_pmcxml(StringIO(_CITATION_XML), inject_citations=True, clean_numeric_citations=True))
 
 
 def test_inject_citations_false_drops_citations_like_before():
@@ -133,7 +133,7 @@ def test_inject_citations_resolves_against_parent_ref_list_for_subarticles():
         parse_pmcxml(
             StringIO(_SUBARTICLE_CITATION_XML),
             inject_citations=True,
-            clean_citations=False,
+            clean_numeric_citations=False,
             return_xml=True,
         )
     )
@@ -176,7 +176,7 @@ _SQUARE_BRACKET_XREF_XML = '''<article>
 </article>'''
 
 
-def test_clean_citations_default_drops_own_content_in_square_brackets():
+def test_clean_numeric_citations_default_drops_own_content_in_square_brackets():
     # the bibr citation's own content "[1]" is dropped outright, regardless of surrounding
     # context (no parentheses needed, unlike the "(Table 1)" case)
     docs = list(parse_pmcxml(StringIO(_SQUARE_BRACKET_XREF_XML), inject_citations=False))
@@ -186,12 +186,12 @@ def test_clean_citations_default_drops_own_content_in_square_brackets():
     assert 'Figure 1' in text  # unrelated, unbracketed xref still survives
 
 
-def test_clean_citations_false_keeps_own_content_in_square_brackets():
+def test_clean_numeric_citations_false_keeps_own_content_in_square_brackets():
     docs = list(
         parse_pmcxml(
             StringIO(_SQUARE_BRACKET_XREF_XML),
             inject_citations=False,
-            clean_citations=False,
+            clean_numeric_citations=False,
         )
     )
     text = ' '.join(p['text'] for p in docs[0]['text_sources']['article'])
@@ -338,7 +338,7 @@ def test_citation_lookup_skips_unidentifiable_refs():
         parse_pmcxml(
             StringIO(_REF_LIST_EDGE_CASES_XML),
             inject_citations=True,
-            clean_citations=False,
+            clean_numeric_citations=False,
             return_xml=True,
         )
     )
