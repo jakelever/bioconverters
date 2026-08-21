@@ -263,6 +263,58 @@ def test_blank_bracketed_xrefs_drops_standalone_reference():
     assert kept_spans == []
 
 
+def test_blank_bracketed_xrefs_drops_standalone_reference_in_square_brackets():
+    # a bare (non-bracketed-content) xref surrounded by "[...]" in the text is dropped just
+    # like the "(...)" case, wrapper included
+    text = 'The results are shown in [Table 1] below.'
+    start = text.index('Table 1')
+    spans = [(start, len('Table 1'), 'xref', {})]
+
+    new_text, kept_spans = _blank_bracketed_xrefs(text, spans)
+
+    assert len(new_text) == len(text)
+    assert new_text == 'The results are shown in           below.'
+    assert kept_spans == []
+
+
+def test_blank_bracketed_xrefs_keeps_mismatched_surrounding_punctuation():
+    # "[" ... ")" is not a matching pair, so this is left untouched entirely (unlike the
+    # matched "(...)"/"[...]" cases)
+    text = 'The results are shown in [Table 1) below.'
+    start = text.index('Table 1')
+    spans = [(start, len('Table 1'), 'xref', {})]
+
+    new_text, kept_spans = _blank_bracketed_xrefs(text, spans)
+
+    assert new_text == text
+    assert kept_spans == spans
+
+
+def test_blank_bracketed_xrefs_drops_double_wrapped_reference():
+    # the xref's own content is already "[1]", and that's further wrapped in "(...)" - the
+    # whole outer range is blanked so no dangling empty "()" is left behind
+    text = 'As reported previously ([1]).'
+    start = text.index('[1]')
+    spans = [(start, len('[1]'), 'xref', {})]
+
+    new_text, kept_spans = _blank_bracketed_xrefs(text, spans)
+
+    assert len(new_text) == len(text)
+    assert new_text == text.replace('([1])', ' ' * len('([1])'))
+    assert kept_spans == []
+
+
+def test_blank_bracketed_xrefs_drops_double_wrapped_reference_in_square_brackets():
+    text = 'As reported previously [[1]].'
+    start = text.index('[1]')
+    spans = [(start, len('[1]'), 'xref', {})]
+
+    new_text, kept_spans = _blank_bracketed_xrefs(text, spans)
+
+    assert new_text == text.replace('[[1]]', ' ' * len('[[1]]'))
+    assert kept_spans == []
+
+
 def test_blank_bracketed_xrefs_keeps_mixed_prose():
     text = 'The results are shown in (see Table 1) below.'
     start = text.index('Table 1')

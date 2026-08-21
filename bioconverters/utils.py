@@ -81,21 +81,28 @@ def _trim_buggy_sentences(text: str) -> str:
     return trimmed_text
 
 
+_BRACKET_PAIRS = {"(": ")", "[": "]"}
+
+
 def _blank_bracketed_xrefs(text: str, spans: list) -> tuple:
     """
-    Blank out xref content that reads as clutter once left in plain text, two ways:
+    Blank out xref content that reads as clutter once left in plain text. Two checks feed
+    into one blanking decision per xref:
 
-    1. An xref whose own content is already wrapped in square brackets (e.g. "[1]",
-       "[1,2]") is blanked outright, brackets included - determined purely from the
-       xref's own text, no surrounding context needed, since a bracketed marker like
-       this reads fine dropped from a sentence as-is (e.g. "shown previously [1]." ->
-       "shown previously.").
-    2. An xref immediately wrapped in "(...)" with nothing else inside the parentheses
-       (e.g. "(Table 1)") has the whole "(...)" blanked, parens included - the reference
-       is dropped as unnecessary clutter rather than left dangling for the reader. Only
-       fires when the xref is immediately adjacent (aside from whitespace) to both the
-       opening and closing paren, so a mixed parenthetical like "(see Table 1)" or a
-       grouped one like "(Figure 7 and Table 3)" is left untouched.
+    1. Content check: is the xref's own text already wrapped in square brackets (e.g.
+       "[1]", "[1,2]")? Determined purely from the xref's own text, no surrounding context
+       needed.
+    2. Context check: is the xref immediately adjacent (aside from whitespace) to a
+       matching pair of "(...)" or "[...]" in the surrounding text, with nothing else
+       inside? E.g. "(Table 1)" or "[Table 1]". Mismatched punctuation (e.g. "(Table 1]")
+       doesn't count. A mixed parenthetical like "(see Table 1)" or a grouped one like
+       "(Figure 7 and Table 3)" is left untouched, since neither is a bare wrapper.
+
+    If the context check matches, the whole outer wrapper is blanked (this also covers the
+    "double-wrapped" case, e.g. "([1])", where the xref's own bracketed content sits inside
+    a further pair - blanking the wider range avoids leaving a dangling empty "()" behind).
+    Otherwise, if only the content check matches, just the xref's own text is blanked (e.g.
+    "shown previously [1]." -> "shown previously.", with no wrapper to widen the blank to).
 
     Preserves length (spaces get collapsed later) so no span-offset adjustment is needed
     for the remaining spans.
@@ -110,10 +117,7 @@ def _blank_bracketed_xrefs(text: str, spans: list) -> tuple:
 
         end = start + length
         xref_text = text[start:end].strip()
-
-        if xref_text.startswith("[") and xref_text.endswith("]"):
-            new_text = new_text[:start] + " " * length + new_text[end:]
-            continue
+        content_bracketed = xref_text.startswith("[") and xref_text.endswith("]")
 
         before_idx = start - 1
         while before_idx >= 0 and text[before_idx].isspace():
@@ -123,16 +127,20 @@ def _blank_bracketed_xrefs(text: str, spans: list) -> tuple:
         while after_idx < len(text) and text[after_idx].isspace():
             after_idx += 1
 
-        is_parenthetical = (
+        context_bracketed = (
             before_idx >= 0
-            and text[before_idx] == "("
             and after_idx < len(text)
-            and text[after_idx] == ")"
+            and text[before_idx] in _BRACKET_PAIRS
+            and text[after_idx] == _BRACKET_PAIRS[text[before_idx]]
         )
 
-        if is_parenthetical:
+        if context_bracketed:
             blank_start, blank_end = before_idx, after_idx + 1
             new_text = new_text[:blank_start] + " " * (blank_end - blank_start) + new_text[blank_end:]
+            continue
+
+        if content_bracketed:
+            new_text = new_text[:start] + " " * length + new_text[end:]
             continue
 
         kept_spans.append((start, length, tag, attrib))
@@ -193,7 +201,7 @@ def _extract_passages(
         return_xml: return marked-up XML strings if True, plain unescaped text if False
         trim_buggy_sentences: trim overly long, unbroken runs of text (see _trim_buggy_sentences)
         clean_xrefs_in_brackets: drop xref content that's either wrapped in "[...]" itself,
-            or the sole content of a surrounding "(...)" (see _blank_bracketed_xrefs)
+            or the sole content of a surrounding "(...)"/"[...]" (see _blank_bracketed_xrefs)
     """
     if not isinstance(elements, list):
         elements = [elements]

@@ -386,17 +386,22 @@ def parse_pmcxml(
             too, since the citation marker text is no longer blanked (though the injected
             attributes themselves don't survive being stripped down to plain text).
         clean_xrefs_in_brackets: drop xref content that reads as clutter once left in
-            plain text, in two ways: (1) an xref whose own content is already wrapped in
-            square brackets (e.g. "[1]", "[1,2]") is dropped outright, brackets included -
-            this is determined from the xref's own content alone, regardless of what
-            surrounds it; (2) an xref that's the sole content of a surrounding "(...)"
-            (e.g. "(Table 1)", "(Fig. 2)") has the whole "(...)" dropped, parentheses
-            included - avoids dangling text like "shown in ." left behind by an otherwise-
-            blanked xref. The parenthetical case only fires when the xref fills the
-            parentheses on its own; mixed ("(see Table 1)") or grouped ("(Figure 7 and
-            Table 3)") parentheticals are left untouched. Default False here (unlike
-            pmcxml2txt), since this can remove citation markers that the caller may still
-            want visible in return_xml=True/inline-markup output.
+            plain text. Two checks feed into one blanking decision per xref: (1) is the
+            xref's own content already wrapped in square brackets (e.g. "[1]", "[1,2]")?
+            determined from the xref's own content alone, regardless of what surrounds it;
+            (2) is the xref the sole content of a surrounding "(...)" or "[...]" (e.g.
+            "(Table 1)", "[Fig. 2]")? If the surrounding-wrapper check matches, the whole
+            wrapper is dropped, avoiding dangling text like "shown in ." left behind by an
+            otherwise-blanked xref - this also covers a "double-wrapped" reference like
+            "([1])", where dropping just the inner "[1]" would leave an empty "()" behind.
+            If only the xref's own content is bracketed, with no surrounding wrapper, just
+            that content is dropped (e.g. "shown previously [1]." -> "shown previously.").
+            The surrounding-wrapper check only fires when the xref fills it on its own and
+            the punctuation on each side matches (both round or both square); mixed ("(see
+            Table 1)"), grouped ("(Figure 7 and Table 3)"), or mismatched ("[Table 1)")
+            wrappers are left untouched. Default False here (unlike pmcxml2txt), since this
+            can remove citation markers that the caller may still want visible in
+            return_xml=True/inline-markup output.
     """
     source = _apply_pmc_xlink_fix(source)
 

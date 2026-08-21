@@ -104,14 +104,16 @@ before: "...preferentially the active conformation[14]. Figure 5..."
 after:  "...preferentially the active conformation . Figure 5..."
 ```
 
-Removing cross-references in parentheses:
+Removing cross-references wrapped in parentheses or square brackets:
 
 ```
 before: "...reported in various solid cancers (Table 1). Analogous mutations..."
 after:  "...reported in various solid cancers. Analogous mutations..."
 ```
 
-The parenthetical case only fires when the xref fills the parentheses on its own - a mixed reference like `"(see Table 1)"` or a grouped one like `"(Figure 7 and Table 3)"` is left untouched, since the reference reads as part of the sentence in those cases.
+This also handles a "double-wrapped" reference, where the xref's own bracketed content sits inside a further wrapper (e.g. `"([1])"`), by dropping the whole outer wrapper rather than leaving a dangling empty `"()"` behind.
+
+The wrapper case only fires when the xref fills it on its own and the punctuation matches on both sides (both round or both square) - a mixed reference like `"(see Table 1)"`, a grouped one like `"(Figure 7 and Table 3)"`, or mismatched punctuation like `"[Table 1)"` is left untouched, since none of those read as a bare wrapper around the reference.
 
 ## Keeping some formatting
 
