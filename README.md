@@ -92,3 +92,28 @@ Notable flags:
 ## Notes on text extraction
 
 Text is extracted using [spans_and_trees](https://github.com/jakelever/spans_and_trees). Table content is omitted from extracted text. Overly long, unbroken runs of text are automatically trimmed to a maximum length.
+
+## `inject_citations`
+
+PMC articles cite references with `<xref ref-type="bibr" rid="...">1</xref>`, where `rid` points at a `<ref>` in the back-matter `<ref-list>`. With `inject_citations=True` (the default for `parse_pmcxml`), each of these is resolved against its `<ref>` and retagged to `<citation>`, with the referenced pub-ids (e.g. `pmid`, `doi`) and a `count` of how many references it bundles added as attributes:
+
+```xml
+<!-- before -->
+<xref ref-type="bibr" rid="r2 r3">2,3</xref>
+
+<!-- after -->
+<citation pmid="222|333" count="2">2,3</citation>
+```
+
+A grouped citation (multiple `rid`s, e.g. "[2,3]") gets its pub-id values `|`-joined, with `count` telling you how many references were bundled without needing to split them yourself. Citations are kept in the output like this instead of being dropped like other ignored tags - the marker text ("2,3") stays visible either way, so this mainly matters if you want the `pmid`/`doi`/`count` attributes; they don't survive `return_xml=False`'s plain-text output, which is why `pmcxml2bioc` and `pmcxml2txt` both default `inject_citations` to `False` (no point paying for the ref-list lookup if nothing will show it).
+
+## `clean_xrefs_in_parentheses`
+
+Cross-references like `<xref ref-type="fig">Table 1</xref>` are kept in extracted text (fig/table/section labels need to survive for sentences that read them as a word, e.g. "shown in Table 1"). But when a reference is the *entire* content of a parenthetical, e.g. `"(Table 1)"`, it usually reads as redundant clutter rather than as part of the sentence. With `clean_xrefs_in_parentheses=True` (the default), that whole parenthetical is dropped:
+
+```
+before: "...reported in various solid cancers (Table 1). Analogous mutations..."
+after:  "...reported in various solid cancers. Analogous mutations..."
+```
+
+This only fires when the xref fills the parentheses on its own - a mixed reference like `"(see Table 1)"` or a grouped one like `"(Figure 7 and Table 3)"` is left untouched, since the reference reads as part of the sentence in those cases.
