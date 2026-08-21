@@ -7,6 +7,7 @@ from bioconverters.pmc_constants import PMC_IGNORE_TAGS, PMC_KEEP_TAGS, PMC_SPLI
 from bioconverters.utils import (
     _blank_parenthetical_xrefs,
     _extract_passages,
+    _remove_brackets_from_titles,
     _remove_brackets_without_words,
 )
 
@@ -27,6 +28,14 @@ from bioconverters.utils import (
 )
 def test_remove_brackets_without_words(test_input, expected):
     assert expected == _remove_brackets_without_words(test_input)
+
+
+def test_remove_brackets_from_titles_strips_brackets_but_keeps_period():
+    assert _remove_brackets_from_titles('[A study of things].') == 'A study of things.'
+
+
+def test_remove_brackets_from_titles_leaves_normal_title_untouched():
+    assert _remove_brackets_from_titles('A normal title.') == 'A normal title.'
 
 
 def test_extract_figure_label():
@@ -218,6 +227,28 @@ def test_drops_extlink_urls_but_keeps_xref_text():
     # inject_citations feature (see test_pmcxml.py), not something _extract_passages does
     # on its own
     assert '[14]' in text
+
+
+def test_extract_passages_accepts_single_element_not_just_list():
+    # elements may be passed as a single Element rather than wrapped in a list
+    elem = etree.fromstring('<article><p>Some text.</p></article>')
+    passages = _extract_passages(
+        elem, PMC_IGNORE_TAGS, PMC_SPLIT_TAGS, PMC_KEEP_TAGS, return_xml=False,
+        trim_buggy_sentences=True,
+    )
+    assert passages == ['Some text.']
+
+
+def test_extract_passages_skips_passages_left_empty_by_ignore_tags():
+    # a passage entirely made of ignored content (here, a table) is blanked down to nothing
+    # by spans_to_passages itself (it drops any passage whose stripped text is blank), so
+    # no empty string should surface in the results
+    xml = '<article><p>Real text.</p><p><table><tr><td>1</td></tr></table></p></article>'
+    passages = _extract_passages(
+        [etree.fromstring(xml)], PMC_IGNORE_TAGS, PMC_SPLIT_TAGS, PMC_KEEP_TAGS,
+        return_xml=False, trim_buggy_sentences=True,
+    )
+    assert passages == ['Real text.']
 
 
 def test_blank_parenthetical_xrefs_drops_standalone_reference():
