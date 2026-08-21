@@ -329,7 +329,7 @@ def test_pubmedxml2txt_drops_abstract_passage_left_empty_by_bracket_cleanup():
 def test_fix_exponentials_defaults():
     import inspect
 
-    assert inspect.signature(parse_pubmedxml).parameters['fix_exponentials'].default is False
+    assert inspect.signature(parse_pubmedxml).parameters['fix_exponentials'].default is True
     assert inspect.signature(pubmedxml2txt).parameters['fix_exponentials'].default is True
     assert inspect.signature(pubmedxml2bioc).parameters['fix_exponentials'].default is True
 

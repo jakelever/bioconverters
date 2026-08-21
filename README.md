@@ -60,7 +60,7 @@ for text in pmcxml2txt('/path/to/pmc.xml', include_metadata=True):
     ...
 ```
 
-Flags: `sections` (default `("title", "abstract", "article")`, also available: `subtitle`, `back`, `floating`), `include_metadata`, `passage_separator`, `trim_buggy_sentences`, `inject_citations` (default `False` here - see below), `clean_xrefs_in_brackets` (default `True` here - see below).
+Flags: `sections` (default `("title", "abstract", "article")`, also available: `subtitle`, `back`, `floating`), `include_metadata`, `passage_separator`, `trim_buggy_sentences`, `inject_citations` (see below), `clean_xrefs_in_brackets` (see below).
 
 ### `pmcxml2bioc` - BioC documents
 
@@ -72,7 +72,7 @@ for doc in pmcxml2bioc('/path/to/pmc.xml'):
     ...
 ```
 
-### `parse_pmcxml` - raw dicts, with inline markup and citation control
+### `parse_pmcxml` - raw dicts, with optional inline markup and citation control
 
 ```python
 from bioconverters import parse_pmcxml
@@ -84,10 +84,11 @@ for article in parse_pmcxml('/path/to/pmc.xml'):
     ...
 ```
 
-Notable flags:
-- `keep_tags` - preserve inline markup (bold/italic/sup/sub/etc.) in each passage's text, e.g. `"some <sup>1</sup>H text"`. Pass `set()` for plain text.
-- `inject_citations` (default `True`) - resolve each in-text citation's `pmid`/`doi` and retag it to `<citation pmid="...">1</citation>`, kept in the output instead of dropped.
-- `clean_xrefs_in_brackets` (default `False` here, unlike `pmcxml2txt`) - drop a reference that's wrapped in `[...]` or `(...)` on its own, since it reads as redundant clutter once cross-references are no longer blanked out - see below.
+`parse_pmcxml` shares its defaults with `pmcxml2txt`/`pmcxml2bioc`, so behavior is consistent regardless of entry point. Notable flags:
+- `return_xml` (default `False`) - return each passage's text as a marked-up XML string instead of plain text. Pair with `keep_tags` to control which tags survive, e.g. `"some <sup>1</sup>H text"`.
+- `keep_tags` - which tags' markup is preserved inline when `return_xml=True`. Defaults to `pmc_constants.PMC_KEEP_TAGS` (`<sup>`, `<sub>`, `<italic>`, etc).
+- `inject_citations` (default `False`) - resolve each in-text citation's `pmid`/`doi` and retag it to `<citation pmid="...">1</citation>`, kept in the output instead of dropped.
+- `clean_xrefs_in_brackets` (default `True`) - drop a reference that's wrapped in `[...]` or `(...)` on its own, since it reads as redundant clutter once cross-references are no longer blanked out - see below.
 
 ## Notes on text extraction
 
@@ -95,7 +96,7 @@ Text is extracted using [spans_and_trees](https://github.com/jakelever/spans_and
 
 ## Cleaning up text with `clean_xrefs_in_brackets`
 
-The text can contain some extra apparent clutter such as cross-references in parentheses and citations in square brackets. The `clean_xrefs_in_brackets` argument removes both, which can be a good idea for easier text processing. This is the default for `pmcxml2txt` and not for other methods.
+The text can contain some extra apparent clutter such as cross-references in parentheses and citations in square brackets. The `clean_xrefs_in_brackets` argument (default `True`) removes both, which is a good idea for easier text processing.
 
 Removing square brackets:
 
@@ -121,12 +122,12 @@ Some XML tags convey meaningful information and text looks horrible without the 
 
 There are two options:
 
-1. If you want plain text, tags are stripped automatically. But the `fix_exponentials` flag (default `True` for the `*2txt`/`*2bioc` methods, `False` for `parse_pmcxml`/`parse_pubmedxml`) tries to spot cases where an exponential can be nicely cleaned up (e.g. to `"3x10^8 m/s"`).
-2. Work with a modified XML format that keeps some of the formatting tags. `parse_pmcxml` does this, controlled by the `return_xml` boolean flag and `keep_tags`, which defaults to the `pmc_constants.PMC_KEEP_TAGS` list of tags. This list includes `<sup>`, `<sub>` and others.
+1. If you want plain text, tags are stripped automatically. But the `fix_exponentials` flag (default `True`) tries to spot cases where an exponential can be nicely cleaned up (e.g. to `"3x10^8 m/s"`).
+2. Or work with a modified XML format that keeps some of the formatting tags, by passing `return_xml=True` to `parse_pmcxml`. Which tags survive is controlled by `keep_tags`, which defaults to the `pmc_constants.PMC_KEEP_TAGS` list of tags. This list includes `<sup>`, `<sub>` and others.
 
 ## Getting citation info with `inject_citations`
 
-PMC articles cite references with `<xref ref-type="bibr" rid="...">1</xref>`, where `rid` points at a `<ref>` in the back-matter `<ref-list>`. With `inject_citations=True` (the default for `parse_pmcxml`), the information is pulled from the bibliography so no cross-referencing is needed! The default is `False` for the other methods.
+PMC articles cite references with `<xref ref-type="bibr" rid="...">1</xref>`, where `rid` points at a `<ref>` in the back-matter `<ref-list>`. With `inject_citations=True` (default `False`), the information is pulled from the bibliography so no cross-referencing is needed.
 
 The referenced pub-ids (e.g. `pmid`, `doi`) and a `count` of how many references are added as attributes:
 

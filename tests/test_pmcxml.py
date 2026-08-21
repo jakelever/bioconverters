@@ -57,7 +57,7 @@ _CITATION_XML = '''<article>
 
 
 def test_inject_citations_adds_pmid_doi_attributes():
-    docs = list(parse_pmcxml(StringIO(_CITATION_XML)))
+    docs = list(parse_pmcxml(StringIO(_CITATION_XML), inject_citations=True, return_xml=True))
     text = ' '.join(p['text'] for p in docs[0]['text_sources']['article'])
 
     # single-rid citation gets retagged to <citation> with its pmid/doi attributes, and a
@@ -84,7 +84,7 @@ def test_inject_citations_adds_pmid_doi_attributes():
 
 
 def test_inject_citations_false_drops_citations_like_before():
-    docs = list(parse_pmcxml(StringIO(_CITATION_XML), inject_citations=False))
+    docs = list(parse_pmcxml(StringIO(_CITATION_XML), inject_citations=False, return_xml=True))
     text = ' '.join(p['text'] for p in docs[0]['text_sources']['article'])
     assert '<xref' not in text
     assert '<citation' not in text
@@ -117,7 +117,7 @@ _SUBARTICLE_CITATION_XML = '''<article>
 def test_inject_citations_resolves_against_parent_ref_list_for_subarticles():
     # sub-articles typically don't carry their own <ref-list> and cite the parent's -
     # injection runs once on the whole document, so this should still resolve correctly
-    docs = list(parse_pmcxml(StringIO(_SUBARTICLE_CITATION_XML)))
+    docs = list(parse_pmcxml(StringIO(_SUBARTICLE_CITATION_XML), inject_citations=True, return_xml=True))
     assert len(docs) == 2
     sub_doc = docs[1]
     assert sub_doc['pmid'] == '2'
@@ -132,24 +132,23 @@ _PARENTHETICAL_XREF_XML = '''<article>
 </article>'''
 
 
-def test_clean_xrefs_in_brackets_default_false_keeps_dangling_reference():
-    # parse_pmcxml defaults clean_xrefs_in_brackets to False (unlike pmcxml2txt)
+def test_clean_xrefs_in_brackets_default_drops_standalone_parenthetical_reference():
     docs = list(parse_pmcxml(StringIO(_PARENTHETICAL_XREF_XML), inject_citations=False))
     text = ' '.join(p['text'] for p in docs[0]['text_sources']['article'])
-    assert 'shown in (Table 3) below' in text
+    assert 'shown in below' in text
+    assert 'third row' in text  # unrelated plain-text mention still survives
 
 
-def test_clean_xrefs_in_brackets_true_drops_standalone_parenthetical_reference():
+def test_clean_xrefs_in_brackets_false_keeps_dangling_reference():
     docs = list(
         parse_pmcxml(
             StringIO(_PARENTHETICAL_XREF_XML),
             inject_citations=False,
-            clean_xrefs_in_brackets=True,
+            clean_xrefs_in_brackets=False,
         )
     )
     text = ' '.join(p['text'] for p in docs[0]['text_sources']['article'])
-    assert 'shown in below' in text
-    assert 'third row' in text  # unrelated plain-text mention still survives
+    assert 'shown in (Table 3) below' in text
 
 
 _SQUARE_BRACKET_XREF_XML = '''<article>
@@ -158,16 +157,10 @@ _SQUARE_BRACKET_XREF_XML = '''<article>
 </article>'''
 
 
-def test_clean_xrefs_in_brackets_true_drops_own_content_in_square_brackets():
+def test_clean_xrefs_in_brackets_default_drops_own_content_in_square_brackets():
     # the xref's own content "[1]" is dropped outright, regardless of surrounding context
     # (no parentheses needed, unlike the "(Table 1)" case)
-    docs = list(
-        parse_pmcxml(
-            StringIO(_SQUARE_BRACKET_XREF_XML),
-            inject_citations=False,
-            clean_xrefs_in_brackets=True,
-        )
-    )
+    docs = list(parse_pmcxml(StringIO(_SQUARE_BRACKET_XREF_XML), inject_citations=False))
     text = ' '.join(p['text'] for p in docs[0]['text_sources']['article'])
     # collapsed whitespace leaves a single space where "[1]" used to be
     assert 'reported previously .' in text
@@ -175,7 +168,13 @@ def test_clean_xrefs_in_brackets_true_drops_own_content_in_square_brackets():
 
 
 def test_clean_xrefs_in_brackets_false_keeps_own_content_in_square_brackets():
-    docs = list(parse_pmcxml(StringIO(_SQUARE_BRACKET_XREF_XML), inject_citations=False))
+    docs = list(
+        parse_pmcxml(
+            StringIO(_SQUARE_BRACKET_XREF_XML),
+            inject_citations=False,
+            clean_xrefs_in_brackets=False,
+        )
+    )
     text = ' '.join(p['text'] for p in docs[0]['text_sources']['article'])
     assert 'reported previously [1].' in text
 
@@ -217,11 +216,15 @@ def test_pmcxml2txt_inject_citations_defaults_to_false():
     assert inspect.signature(pmcxml2txt).parameters['inject_citations'].default is False
 
 
-def test_fix_exponentials_defaults():
+def test_flag_defaults_are_consistent_across_pmc_functions():
     import inspect
 
-    assert inspect.signature(parse_pmcxml).parameters['fix_exponentials'].default is False
-    assert inspect.signature(pmcxml2txt).parameters['fix_exponentials'].default is True
+    for func in (parse_pmcxml, pmcxml2txt):
+        params = inspect.signature(func).parameters
+        assert params['inject_citations'].default is False
+        assert params['clean_xrefs_in_brackets'].default is True
+        assert params['fix_exponentials'].default is True
+    assert inspect.signature(parse_pmcxml).parameters['return_xml'].default is False
     assert inspect.signature(pmcxml2bioc).parameters['fix_exponentials'].default is True
 
 
@@ -312,7 +315,9 @@ def test_citation_lookup_skips_unidentifiable_refs():
     # <ref> whose pub-id elements contribute nothing usable (missing pub-id-type or text)
     # is simply absent from the lookup - citing it still retags to <citation>, just with no
     # pmid/doi attributes added, rather than crashing
-    docs = list(parse_pmcxml(StringIO(_REF_LIST_EDGE_CASES_XML)))
+    docs = list(
+        parse_pmcxml(StringIO(_REF_LIST_EDGE_CASES_XML), inject_citations=True, return_xml=True)
+    )
     text = ' '.join(p['text'] for p in docs[0]['text_sources']['article'])
     # r2 gets retagged (ref-type="bibr") but has no pmid/doi attribute added, since nothing
     # in its ref-list entry was usable

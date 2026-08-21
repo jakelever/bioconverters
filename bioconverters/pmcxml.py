@@ -370,11 +370,11 @@ def _apply_pmc_xlink_fix(source: Union[str, TextIO]) -> TextIO:
 def parse_pmcxml(
     source: Union[str, TextIO],
     keep_tags=PMC_KEEP_TAGS,
-    return_xml: bool = True,
+    return_xml: bool = False,
     trim_buggy_sentences: bool = True,
-    inject_citations: bool = True,
-    clean_xrefs_in_brackets: bool = False,
-    fix_exponentials: bool = False,
+    inject_citations: bool = False,
+    clean_xrefs_in_brackets: bool = True,
+    fix_exponentials: bool = True,
 ) -> Iterable[PMCArticle]:
     """
     Parse a PMC XML file into a series of PMCArticle dicts (one per article/sub-article).
@@ -383,19 +383,21 @@ def parse_pmcxml(
         source: The text or file handle containing the PMC XML
         keep_tags: tags whose markup is preserved inline in each passage's text (e.g. "sup",
             "italic") - pass an empty set for plain text with no markup.
-        return_xml: return each passage's text as a marked-up XML string if True (default),
-            or as plain, unescaped text with any markup stripped if False.
+        return_xml: return each passage's text as a marked-up XML string if True, or as
+            plain, unescaped text with any markup stripped if False (default).
         trim_buggy_sentences: trim overly long, unbroken runs of text to a maximum length,
             to avoid issues with buggy sentences in some PMC articles.
         inject_citations: resolve each in-text bibr citation's pmid/doi and retag it to
             <citation>, kept in the output instead of dropped (see _inject_citations).
         clean_xrefs_in_brackets: drop bracket-wrapped xref clutter, e.g. "(Table 1)" or a
-            citation marker already in its own "[1]" (see _blank_bracketed_xrefs). Default
-            False here (unlike pmcxml2txt), since it can remove text the caller may still
-            want visible.
+            citation marker already in its own "[1]" (see _blank_bracketed_xrefs).
         fix_exponentials: with return_xml=False, recover a digit-preceded numeric "<sup>"
             as "^N" instead of losing it to plain concatenation, e.g. "10<sup>8</sup>" ->
-            "10^8" (see _fix_exponentials). Default False here (unlike pmcxml2txt/pmcxml2bioc).
+            "10^8" (see _fix_exponentials).
+
+    These five defaults (return_xml=False, trim_buggy_sentences=True,
+    inject_citations=False, clean_xrefs_in_brackets=True, fix_exponentials=True) match
+    pmcxml2bioc/pmcxml2txt, so behavior is consistent regardless of which entry point is used.
     """
     source = _apply_pmc_xlink_fix(source)
 
@@ -457,7 +459,7 @@ def pmcxml2bioc(
 
     Args:
         source: The text or file handle containing the PMC XML
-        fix_exponentials: see parse_pmcxml. Defaults to True here, unlike parse_pmcxml.
+        fix_exponentials: see parse_pmcxml.
 
     Raises:
         RuntimeError: On any parsing errors
@@ -534,11 +536,11 @@ def pmcxml2txt(
             passage, into the single returned string.
         trim_buggy_sentences: trim overly long, unbroken runs of text to a maximum length,
             to avoid issues with buggy sentences in some PMC articles.
-        inject_citations: see parse_pmcxml - defaults to False here since plain text output
-            can't show the injected pmid/doi attributes anyway, so there's no upside to
-            paying for the ref-list lookup.
+        inject_citations: see parse_pmcxml - plain text output can't show the injected
+            pmid/doi attributes anyway, so there's no upside to paying for the ref-list
+            lookup unless you turn this on.
         clean_xrefs_in_brackets: see parse_pmcxml.
-        fix_exponentials: see parse_pmcxml. Defaults to True here, unlike parse_pmcxml.
+        fix_exponentials: see parse_pmcxml.
 
     Returns:
         An iterator over one plain text string per article/sub-article

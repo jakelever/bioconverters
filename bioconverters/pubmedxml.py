@@ -149,15 +149,15 @@ def _format_mesh_field(prefix: str, mesh_id: str, major_topic_yn: str, name: str
 
 def parse_pubmedxml(
     source: Union[str, TextIO],
-    fix_exponentials: bool = False,
+    fix_exponentials: bool = True,
 ) -> Iterable[PubMedArticle]:
     """
     Args:
         source: path to the MEDLINE xml file
         fix_exponentials: recover a digit-preceded numeric "<sup>" as "^N" instead of losing
             it to plain concatenation, e.g. "10<sup>8</sup>" -> "10^8" (see
-            bioconverters.utils._fix_exponentials). Default False here (unlike
-            pubmedxml2txt/pubmedxml2bioc).
+            bioconverters.utils._fix_exponentials). Same default as pubmedxml2txt/
+            pubmedxml2bioc.
     """
     for event, elem in etree.iterparse(source, events=("start", "end", "start-ns", "end-ns")):
         if event == "end" and elem.tag == "PubmedArticle":  # MedlineCitation'):
@@ -344,7 +344,7 @@ def pubmedxml2bioc(
     """
     Args:
         source: path to the MEDLINE xml file
-        fix_exponentials: see parse_pubmedxml. Defaults to True here, unlike parse_pubmedxml.
+        fix_exponentials: see parse_pubmedxml.
     """
     for pm_doc in parse_pubmedxml(source, fix_exponentials=fix_exponentials):
         bioc_doc = bioc.BioCDocument()
@@ -395,7 +395,7 @@ def pubmedxml2txt(
             like any other passage. Fields that are empty/missing are omitted.
         passage_separator: string used to join the header (if any), and every extracted
             passage, into the single returned string.
-        fix_exponentials: see parse_pubmedxml. Defaults to True here, unlike parse_pubmedxml.
+        fix_exponentials: see parse_pubmedxml.
 
     Returns:
         An iterator over one plain text string per article
