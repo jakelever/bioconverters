@@ -1,6 +1,6 @@
 # BioConverters Package
 
-![PyPi](https://img.shields.io/pypi/v/bioconverters.svg) [![build](https://github.com/jakelever/bioconverters/workflows/build/badge.svg?branch=master)](https://github.com/jakelever/bioconverters/actions) [![codecov](https://codecov.io/gh/jakelever/bioconverters/branch/master/graph/badge.svg)](https://codecov.io/gh/jakelever/bioconverters)
+![PyPi](https://img.shields.io/pypi/v/bioconverters.svg) [![build](https://github.com/jakelever/bioconverters/actions/workflows/tests.yml/badge.svg)](https://github.com/jakelever/bioconverters/actions) [![codecov](https://codecov.io/gh/jakelever/bioconverters/branch/master/graph/badge.svg)](https://codecov.io/gh/jakelever/bioconverters)
 
 The bioconverters package converts PubMed and PMC XML into plain text or BioC format.
 
