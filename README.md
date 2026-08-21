@@ -95,7 +95,9 @@ Text is extracted using [spans_and_trees](https://github.com/jakelever/spans_and
 
 ## Getting citation info with `inject_citations`
 
-PMC articles cite references with `<xref ref-type="bibr" rid="...">1</xref>`, where `rid` points at a `<ref>` in the back-matter `<ref-list>`. With `inject_citations=True` (the default for `parse_pmcxml`), the information is pulled from the bibliography so no cross-referencing is needed! The referenced pub-ids (e.g. `pmid`, `doi`) and a `count` of how many references are added as attributes:
+PMC articles cite references with `<xref ref-type="bibr" rid="...">1</xref>`, where `rid` points at a `<ref>` in the back-matter `<ref-list>`. With `inject_citations=True` (the default for `parse_pmcxml`), the information is pulled from the bibliography so no cross-referencing is needed! The default for methods is False.
+
+The referenced pub-ids (e.g. `pmid`, `doi`) and a `count` of how many references are added as attributes:
 
 ```xml
 <!-- before -->
@@ -105,26 +107,23 @@ PMC articles cite references with `<xref ref-type="bibr" rid="...">1</xref>`, wh
 <citation pmid="222|333" count="2">2,3</citation>
 ```
 
-A grouped citation (multiple `rid`s, e.g. "[2,3]") gets its pub-id values `|`-joined, with `count` telling you how many references were bundled without needing to split them yourself. Citations are kept in the output like this instead of being dropped like other ignored tags - the marker text ("2,3") stays visible either way, so this mainly matters if you want the `pmid`/`doi`/`count` attributes; they don't survive `return_xml=False`'s plain-text output, which is why `pmcxml2bioc` and `pmcxml2txt` both default `inject_citations` to `False` (no point paying for the ref-list lookup if nothing will show it).
+A grouped citation (multiple `rid`s, e.g. "[2,3]") gets its pub-id values `|`-joined, with `count` telling you how many references were bundled without needing to split them yourself.
 
-## `clean_xrefs_in_brackets`
+## Cleaning up text with `clean_xrefs_in_brackets`
 
-Cross-references like `<xref ref-type="fig">Table 1</xref>` are kept in extracted text (fig/table/section labels need to survive for sentences that read them as a word, e.g. "shown in Table 1"). But a reference that's already clutter - either bracketed in its own content, or the sole content of a surrounding parenthetical - usually reads better dropped. `clean_xrefs_in_brackets=True` handles both:
+The text can contain some extra apparent clutter such as cross-references in parentheses and citations in square brackets. The `clean_xrefs_in_brackets` argument removes both, which can a good idea to remove these (for easier text processing). This is the default for `pmcxml2txt` and not for other methods.
 
-**1. Square-bracketed content** - some articles give citation markers as `<xref ref-type="bibr" rid="...">[14]</xref>`, brackets and all. This is judged purely from the xref's own text, so it's dropped outright regardless of what surrounds it:
+Removing square brackets: 
 
 ```
 before: "...preferentially the active conformation[14]. Figure 5..."
 after:  "...preferentially the active conformation . Figure 5..."
 ```
 
-**2. Parenthetical references** - when a reference is the *entire* content of a `(...)`, e.g. `"(Table 1)"`, the whole parenthetical is dropped:
-
+Removing cross-references in parenthesis:
 ```
 before: "...reported in various solid cancers (Table 1). Analogous mutations..."
 after:  "...reported in various solid cancers. Analogous mutations..."
 ```
 
 The parenthetical case only fires when the xref fills the parentheses on its own - a mixed reference like `"(see Table 1)"` or a grouped one like `"(Figure 7 and Table 3)"` is left untouched, since the reference reads as part of the sentence in those cases.
-
-Default is `True` for `pmcxml2txt` (plain text reads better without the clutter) and `False` for `parse_pmcxml`/`pmcxml2bioc` (so citation markers stay put unless you opt in).
