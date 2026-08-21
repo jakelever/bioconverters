@@ -85,29 +85,43 @@ def _trim_buggy_sentences(text: str) -> str:
 _BRACKET_PAIRS = {"(": ")", "[": "]"}
 
 
-def _pull_period_over_trailing_separators(text: str, blanked_starts: list) -> str:
+def _pull_punctuation_over_trailing_separators(text: str, blanked_starts: list) -> str:
     """
-    After blanking out spans (citations/xrefs), pull a sentence-ending period back over any
-    run of leftover separator characters (spaces, commas) between the last real word and the
-    period, for each blanked span's start position - e.g. "word    ,    ." -> "word.       " -
-    so a later whitespace collapse doesn't leave a dangling "word , ." or "word ." behind. Left
-    alone if the run doesn't lead directly to a period (e.g. more prose follows, or the citation
-    isn't the last one in a run - the next blanked span's own start position handles that one).
+    After blanking out spans (citations/xrefs), pull trailing punctuation back over any run
+    of leftover separator characters (spaces, commas) between the last real word and that
+    punctuation, for each blanked span's start position, so a later whitespace collapse
+    doesn't leave a dangling "word , ." / "word ." / "word ," behind.
 
-    If the word right before the run already ends in its own period (an abbreviation like
-    "Fig." or "et al."), that period is left to stand alone as the sentence-ender instead of
-    inserting a second one - e.g. "Fig.     ." -> "Fig.       ", not "Fig..      ".
+    Two cases, tried in order:
+    - The run leads directly to a sentence-ending period (e.g. "word    ,    ." ->
+      "word.       "). If the word right before the run already ends in its own period (an
+      abbreviation like "Fig." or "et al."), that period is left to stand alone instead of
+      inserting a second one (e.g. "Fig.     ." -> "Fig.       ", not "Fig..      ").
+    - Otherwise, if the run leads to a comma that continues the sentence rather than ending
+      it (e.g. "word    , more text" -> "word,    more text"), that comma is pulled back
+      instead.
 
-    Preserves length so no span-offset adjustment is needed.
+    Left alone if the run leads to neither (e.g. more prose follows with no punctuation, or
+    the citation isn't the last one in a run - the next blanked span's own start position
+    handles that one). Preserves length so no span-offset adjustment is needed.
     """
     for start in blanked_starts:
         prefix_end = len(text[:start].rstrip())
-        match = re.match(r"[\s,]+\.", text[prefix_end:])
-        if match:
-            match_len = len(match.group(0))
+
+        period_match = re.match(r"[\s,]+\.", text[prefix_end:])
+        if period_match:
+            match_len = len(period_match.group(0))
             already_ends_in_period = prefix_end > 0 and text[prefix_end - 1] == "."
             replacement = " " * match_len if already_ends_in_period else "." + " " * (match_len - 1)
             text = text[:prefix_end] + replacement + text[prefix_end + match_len:]
+            continue
+
+        comma_match = re.match(r"\s*,", text[prefix_end:])
+        if comma_match:
+            match_len = len(comma_match.group(0))
+            replacement = "," + " " * (match_len - 1)
+            text = text[:prefix_end] + replacement + text[prefix_end + match_len:]
+
     return text
 
 
@@ -118,9 +132,10 @@ def _blank_bracketed_xrefs(text: str, spans: list) -> tuple:
     3)"), or mismatched ("[Table 1)") wrappers are left untouched. (A bibr citation whose own
     content is already bracketed, e.g. "[1]", is handled separately by _clean_numeric_citations,
     which runs first - by the time this runs, such spans are already blanked and gone.) A
-    wrapper left directly before a sentence-ending period (e.g. "survivorship (Smith, 2020).")
-    has that period pulled back over the gap - see _pull_period_over_trailing_separators.
-    Preserves length so no span-offset adjustment is needed.
+    wrapper left directly before trailing punctuation (e.g. "survivorship (Smith, 2020)." or
+    "shown (Smith, 2020), too") has that punctuation pulled back over the gap - see
+    _pull_punctuation_over_trailing_separators. Preserves length so no span-offset adjustment
+    is needed.
     """
     new_text = text
     kept_spans = []
@@ -156,7 +171,7 @@ def _blank_bracketed_xrefs(text: str, spans: list) -> tuple:
 
         kept_spans.append((start, length, tag, attrib))
 
-    new_text = _pull_period_over_trailing_separators(new_text, blanked_starts)
+    new_text = _pull_punctuation_over_trailing_separators(new_text, blanked_starts)
 
     return new_text, kept_spans
 
@@ -172,9 +187,9 @@ def _clean_numeric_citations(text: str, spans: list) -> tuple:
     surrounding context is required: this is what catches a citation marker glued directly
     onto a word with no separating space at all (e.g. "tuberculosis<xref><sup>1</sup>
     </xref>" -> "tuberculosis1" if left unblanked), which can't be detected by looking at
-    context since there isn't any. A citation (or run of citations) left directly before a
-    sentence-ending period (e.g. "high [1], [2].") has that period pulled back over the gap -
-    see _pull_period_over_trailing_separators.
+    context since there isn't any. A citation (or run of citations) left directly before
+    trailing punctuation (e.g. "high [1], [2]." or "shown [1], [2], too") has that punctuation
+    pulled back over the gap - see _pull_punctuation_over_trailing_separators.
 
     An author-date citation (e.g. "Smith et al., 2020") isn't purely numeric, so it's left
     untouched - unlike a bare reference number, it's still informative without the full
@@ -199,7 +214,7 @@ def _clean_numeric_citations(text: str, spans: list) -> tuple:
 
         kept_spans.append((start, length, tag, attrib))
 
-    new_text = _pull_period_over_trailing_separators(new_text, blanked_starts)
+    new_text = _pull_punctuation_over_trailing_separators(new_text, blanked_starts)
 
     return new_text, kept_spans
 

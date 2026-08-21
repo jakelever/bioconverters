@@ -386,6 +386,19 @@ def test_blank_bracketed_xrefs_avoids_double_period_after_abbreviation():
     assert kept_spans == []
 
 
+def test_blank_bracketed_xrefs_pulls_comma_over_blanked_wrapper():
+    # the wrapper sits directly before a comma that continues the sentence, not a period
+    text = 'as shown (Smith et al., 2020), results held.'
+    start = text.index('Smith')
+    spans = [(start, len('Smith et al., 2020'), 'xref', {'ref-type': 'bibr'})]
+
+    new_text, kept_spans = _blank_bracketed_xrefs(text, spans)
+
+    assert len(new_text) == len(text)
+    assert _collapse_whitespace(new_text) == 'as shown, results held.'
+    assert kept_spans == []
+
+
 def test_blank_bracketed_xrefs_keeps_own_bracketed_content_now_handled_by_clean_numeric_citations():
     # own-content-bracketed xrefs are no longer this function's job - that's _clean_numeric_citations
     text = 'Results were reported previously [1].'
@@ -498,6 +511,21 @@ def test_clean_numeric_citations_pulls_period_over_multiple_citations():
 
     assert len(new_text) == len(text)
     assert _collapse_whitespace(new_text) == 'burden remains high.'
+    assert kept_spans == []
+
+
+def test_clean_numeric_citations_pulls_comma_over_mid_sentence_citation():
+    # the citation is glued directly onto the preceding word with no separating space, and
+    # the sentence continues past a comma rather than ending - blanking alone would leave
+    # "conditions , Quinine" (dangling space before the comma)
+    text = 'Digitalis for cardiac conditions1, Quinine for malaria.'
+    start = text.index('1,')
+    spans = [(start, 1, 'xref', {'ref-type': 'bibr'})]
+
+    new_text, kept_spans = _clean_numeric_citations(text, spans)
+
+    assert len(new_text) == len(text)
+    assert _collapse_whitespace(new_text) == 'Digitalis for cardiac conditions, Quinine for malaria.'
     assert kept_spans == []
 
 
