@@ -57,7 +57,14 @@ _CITATION_XML = '''<article>
 
 
 def test_inject_citations_adds_pmid_doi_attributes():
-    docs = list(parse_pmcxml(StringIO(_CITATION_XML), inject_citations=True, return_xml=True))
+    docs = list(
+        parse_pmcxml(
+            StringIO(_CITATION_XML),
+            inject_citations=True,
+            clean_citations=False,
+            return_xml=True,
+        )
+    )
     text = ' '.join(p['text'] for p in docs[0]['text_sources']['article'])
 
     # single-rid citation gets retagged to <citation> with its pmid/doi attributes, and a
@@ -81,6 +88,11 @@ def test_inject_citations_adds_pmid_doi_attributes():
 
     # xref never survives as such - either retagged to <citation> or dropped
     assert '<xref' not in text
+
+
+def test_inject_citations_and_clean_citations_together_raises():
+    with pytest.raises(AssertionError):
+        list(parse_pmcxml(StringIO(_CITATION_XML), inject_citations=True, clean_citations=True))
 
 
 def test_inject_citations_false_drops_citations_like_before():
@@ -117,7 +129,14 @@ _SUBARTICLE_CITATION_XML = '''<article>
 def test_inject_citations_resolves_against_parent_ref_list_for_subarticles():
     # sub-articles typically don't carry their own <ref-list> and cite the parent's -
     # injection runs once on the whole document, so this should still resolve correctly
-    docs = list(parse_pmcxml(StringIO(_SUBARTICLE_CITATION_XML), inject_citations=True, return_xml=True))
+    docs = list(
+        parse_pmcxml(
+            StringIO(_SUBARTICLE_CITATION_XML),
+            inject_citations=True,
+            clean_citations=False,
+            return_xml=True,
+        )
+    )
     assert len(docs) == 2
     sub_doc = docs[1]
     assert sub_doc['pmid'] == '2'
@@ -153,13 +172,13 @@ def test_clean_xrefs_in_brackets_false_keeps_dangling_reference():
 
 _SQUARE_BRACKET_XREF_XML = '''<article>
     <front><article-meta><article-id pub-id-type="pmid">1</article-id></article-meta></front>
-    <body><p>Results were reported previously <xref ref-type="fig" rid="f1">[1]</xref>. See Figure 1 for details.</p></body>
+    <body><p>Results were reported previously <xref ref-type="bibr" rid="r1">[1]</xref>. See Figure 1 for details.</p></body>
 </article>'''
 
 
-def test_clean_xrefs_in_brackets_default_drops_own_content_in_square_brackets():
-    # the xref's own content "[1]" is dropped outright, regardless of surrounding context
-    # (no parentheses needed, unlike the "(Table 1)" case)
+def test_clean_citations_default_drops_own_content_in_square_brackets():
+    # the bibr citation's own content "[1]" is dropped outright, regardless of surrounding
+    # context (no parentheses needed, unlike the "(Table 1)" case)
     docs = list(parse_pmcxml(StringIO(_SQUARE_BRACKET_XREF_XML), inject_citations=False))
     text = ' '.join(p['text'] for p in docs[0]['text_sources']['article'])
     # collapsed whitespace leaves a single space where "[1]" used to be
@@ -167,12 +186,12 @@ def test_clean_xrefs_in_brackets_default_drops_own_content_in_square_brackets():
     assert 'Figure 1' in text  # unrelated, unbracketed xref still survives
 
 
-def test_clean_xrefs_in_brackets_false_keeps_own_content_in_square_brackets():
+def test_clean_citations_false_keeps_own_content_in_square_brackets():
     docs = list(
         parse_pmcxml(
             StringIO(_SQUARE_BRACKET_XREF_XML),
             inject_citations=False,
-            clean_xrefs_in_brackets=False,
+            clean_citations=False,
         )
     )
     text = ' '.join(p['text'] for p in docs[0]['text_sources']['article'])
@@ -316,7 +335,12 @@ def test_citation_lookup_skips_unidentifiable_refs():
     # is simply absent from the lookup - citing it still retags to <citation>, just with no
     # pmid/doi attributes added, rather than crashing
     docs = list(
-        parse_pmcxml(StringIO(_REF_LIST_EDGE_CASES_XML), inject_citations=True, return_xml=True)
+        parse_pmcxml(
+            StringIO(_REF_LIST_EDGE_CASES_XML),
+            inject_citations=True,
+            clean_citations=False,
+            return_xml=True,
+        )
     )
     text = ' '.join(p['text'] for p in docs[0]['text_sources']['article'])
     # r2 gets retagged (ref-type="bibr") but has no pmid/doi attribute added, since nothing

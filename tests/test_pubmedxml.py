@@ -326,6 +326,26 @@ def test_pubmedxml2txt_drops_abstract_passage_left_empty_by_bracket_cleanup():
     assert texts == ['Real content.']
 
 
+def test_pubmedxml2txt_clear_empty_brackets_false_keeps_bracket_only_content():
+    xml = '''<PubmedArticle>
+        <MedlineCitation>
+            <PMID>99</PMID>
+            <Article>
+                <Journal><JournalIssue><PubDate><Year>2020</Year></PubDate></JournalIssue></Journal>
+                <ArticleTitle>A Test Title ( )</ArticleTitle>
+                <Abstract>
+                    <AbstractText>Real content ( ).</AbstractText>
+                </Abstract>
+            </Article>
+        </MedlineCitation>
+        <PubmedData><ArticleIdList></ArticleIdList></PubmedData>
+    </PubmedArticle>'''
+    texts = list(
+        pubmedxml2txt(StringIO(xml), sections=('title', 'abstract'), clear_empty_brackets=False)
+    )
+    assert texts == ['A Test Title ( )\n\nReal content ( ).']
+
+
 def test_fix_exponentials_defaults():
     import inspect
 

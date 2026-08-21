@@ -149,11 +149,14 @@ def _format_mesh_field(prefix: str, mesh_id: str, major_topic_yn: str, name: str
 
 def parse_pubmedxml(
     source: Union[str, TextIO],
+    clear_empty_brackets: bool = True,
     fix_exponentials: bool = True,
 ) -> Iterable[PubMedArticle]:
     """
     Args:
         source: path to the MEDLINE xml file
+        clear_empty_brackets: remove any "(...)"/"[...]"/"{...}" left containing no word
+            characters (see bioconverters.utils._remove_brackets_without_words).
         fix_exponentials: recover a digit-preceded numeric "<sup>" as "^N" instead of losing
             it to plain concatenation, e.g. "10<sup>8</sup>" -> "10^8" (see
             bioconverters.utils._fix_exponentials). Same default as pubmedxml2txt/
@@ -284,7 +287,8 @@ def parse_pubmedxml(
             )
             title_text = [_remove_brackets_from_titles(t) for t in title_passages]
             title_text = [html.unescape(t) for t in title_text]
-            title_text = [_remove_brackets_without_words(t) for t in title_text]
+            if clear_empty_brackets:
+                title_text = [_remove_brackets_without_words(t) for t in title_text]
 
             # Extract the abstract from the paper
             abstract = elem.findall("./MedlineCitation/Article/Abstract/AbstractText")
@@ -298,7 +302,8 @@ def parse_pubmedxml(
                 fix_exponentials=fix_exponentials,
             )
             abstract_text = [html.unescape(t) for t in abstract_passages]
-            abstract_text = [_remove_brackets_without_words(t) for t in abstract_text]
+            if clear_empty_brackets:
+                abstract_text = [_remove_brackets_without_words(t) for t in abstract_text]
 
             journal_title_fields = elem.findall("./MedlineCitation/Article/Journal/Title")
             journal_title_iso_fields = elem.findall(
@@ -339,14 +344,18 @@ def parse_pubmedxml(
 
 def pubmedxml2bioc(
     source: Union[str, TextIO],
+    clear_empty_brackets: bool = True,
     fix_exponentials: bool = True,
 ) -> Iterable[bioc.BioCDocument]:
     """
     Args:
         source: path to the MEDLINE xml file
+        clear_empty_brackets: see parse_pubmedxml.
         fix_exponentials: see parse_pubmedxml.
     """
-    for pm_doc in parse_pubmedxml(source, fix_exponentials=fix_exponentials):
+    for pm_doc in parse_pubmedxml(
+        source, clear_empty_brackets=clear_empty_brackets, fix_exponentials=fix_exponentials
+    ):
         bioc_doc = bioc.BioCDocument()
         bioc_doc.id = pm_doc["pmid"]
         bioc_doc.infons["title"] = " ".join(pm_doc["title"])
@@ -382,6 +391,7 @@ def pubmedxml2txt(
     sections: Iterable[str] = ("title", "abstract"),
     include_metadata: bool = False,
     passage_separator: str = "\n\n",
+    clear_empty_brackets: bool = True,
     fix_exponentials: bool = True,
 ) -> Iterator[str]:
     """
@@ -395,12 +405,15 @@ def pubmedxml2txt(
             like any other passage. Fields that are empty/missing are omitted.
         passage_separator: string used to join the header (if any), and every extracted
             passage, into the single returned string.
+        clear_empty_brackets: see parse_pubmedxml.
         fix_exponentials: see parse_pubmedxml.
 
     Returns:
         An iterator over one plain text string per article
     """
-    for pm_doc in parse_pubmedxml(source, fix_exponentials=fix_exponentials):
+    for pm_doc in parse_pubmedxml(
+        source, clear_empty_brackets=clear_empty_brackets, fix_exponentials=fix_exponentials
+    ):
         parts = []
         if include_metadata:
             header = _format_metadata_header(

@@ -6,6 +6,7 @@ import pytest
 from bioconverters.pmc_constants import PMC_IGNORE_TAGS, PMC_KEEP_TAGS, PMC_SPLIT_TAGS
 from bioconverters.utils import (
     _blank_bracketed_xrefs,
+    _clean_citations,
     _extract_passages,
     _fix_exponentials,
     _remove_brackets_from_titles,
@@ -16,7 +17,7 @@ from bioconverters.utils import (
 @pytest.mark.parametrize(
     'test_input,expected',
     [
-        (' ((())(', ' ('),
+        (' ((())(', '('),
         ('( [3] [4] )', '( [3] [4] )'),
         ('( [] )', ''),
         ('(Fig. 1)', '(Fig. 1)'),
@@ -353,18 +354,16 @@ def test_blank_bracketed_xrefs_passes_through_non_xref_spans():
     assert kept_spans == spans
 
 
-def test_blank_bracketed_xrefs_drops_own_content_wrapped_in_square_brackets():
-    # the xref's own text is already "[1]" - no surrounding context needed to justify
-    # dropping it, unlike the parenthetical case
+def test_blank_bracketed_xrefs_keeps_own_bracketed_content_now_handled_by_clean_citations():
+    # own-content-bracketed xrefs are no longer this function's job - that's _clean_citations
     text = 'Results were reported previously [1].'
     start = text.index('[1]')
-    spans = [(start, len('[1]'), 'xref', {})]
+    spans = [(start, len('[1]'), 'xref', {'ref-type': 'bibr'})]
 
     new_text, kept_spans = _blank_bracketed_xrefs(text, spans)
 
-    assert len(new_text) == len(text)
-    assert new_text == 'Results were reported previously    .'
-    assert kept_spans == []
+    assert new_text == text
+    assert kept_spans == spans
 
 
 def test_fix_exponentials_converts_digit_preceded_sup_to_caret():
@@ -401,26 +400,94 @@ def test_fix_exponentials_handles_multiple_occurrences():
     assert _fix_exponentials('10<sup>8</sup> and 10<sup>-3</sup>') == '10^8 and 10^-3'
 
 
-def test_blank_bracketed_xrefs_drops_own_content_with_multiple_ids_in_brackets():
+def test_clean_citations_drops_bare_numeric_citation():
+    text = 'Results were reported previously 1.'
+    start = text.index('1.')
+    spans = [(start, 1, 'xref', {'ref-type': 'bibr'})]
+
+    new_text, kept_spans = _clean_citations(text, spans)
+
+    assert len(new_text) == len(text)
+    assert new_text == 'Results were reported previously  .'
+    assert kept_spans == []
+
+
+def test_clean_citations_drops_bracketed_numeric_citation():
+    text = 'Results were reported previously [1].'
+    start = text.index('[1]')
+    spans = [(start, len('[1]'), 'xref', {'ref-type': 'bibr'})]
+
+    new_text, kept_spans = _clean_citations(text, spans)
+
+    assert len(new_text) == len(text)
+    assert new_text == 'Results were reported previously    .'
+    assert kept_spans == []
+
+
+def test_clean_citations_drops_bracketed_multiple_ids():
     text = 'As shown before [1,2,3].'
     start = text.index('[1,2,3]')
-    spans = [(start, len('[1,2,3]'), 'xref', {})]
+    spans = [(start, len('[1,2,3]'), 'xref', {'ref-type': 'bibr'})]
 
-    new_text, kept_spans = _blank_bracketed_xrefs(text, spans)
+    new_text, kept_spans = _clean_citations(text, spans)
 
     assert len(new_text) == len(text)
     assert new_text == text.replace('[1,2,3]', ' ' * len('[1,2,3]'))
     assert kept_spans == []
 
 
-def test_blank_bracketed_xrefs_own_content_check_ignores_surrounding_parentheses():
-    # an already-bracketed xref inside parentheses is still caught by the own-content
-    # check, even though it isn't immediately adjacent to the parens (mixed prose)
+def test_clean_citations_drops_ranged_citation():
+    text = 'As shown before [1-3].'
+    start = text.index('[1-3]')
+    spans = [(start, len('[1-3]'), 'xref', {'ref-type': 'bibr'})]
+
+    new_text, kept_spans = _clean_citations(text, spans)
+
+    assert new_text == text.replace('[1-3]', ' ' * len('[1-3]'))
+    assert kept_spans == []
+
+
+def test_clean_citations_ignores_surrounding_context():
+    # unlike _blank_bracketed_xrefs, no surrounding context is needed or checked - this is
+    # what catches a citation glued directly onto a word with nothing separating them at all
     text = 'As shown before (see [1] for details).'
     start = text.index('[1]')
-    spans = [(start, len('[1]'), 'xref', {})]
+    spans = [(start, len('[1]'), 'xref', {'ref-type': 'bibr'})]
 
-    new_text, kept_spans = _blank_bracketed_xrefs(text, spans)
+    new_text, kept_spans = _clean_citations(text, spans)
 
     assert new_text == 'As shown before (see     for details).'
     assert kept_spans == []
+
+
+def test_clean_citations_drops_citation_glued_directly_to_word():
+    text = 'This was shown in tuberculosis1/HIV co-infected patients.'
+    start = text.index('1/HIV')
+    spans = [(start, 1, 'xref', {'ref-type': 'bibr'})]
+
+    new_text, kept_spans = _clean_citations(text, spans)
+
+    assert new_text == 'This was shown in tuberculosis /HIV co-infected patients.'
+    assert kept_spans == []
+
+
+def test_clean_citations_leaves_non_bibr_xref_untouched():
+    text = 'See Table [1] for details.'
+    start = text.index('[1]')
+    spans = [(start, len('[1]'), 'xref', {'ref-type': 'table'})]
+
+    new_text, kept_spans = _clean_citations(text, spans)
+
+    assert new_text == text
+    assert kept_spans == spans
+
+
+def test_clean_citations_leaves_author_date_citation_untouched():
+    text = 'This was previously shown (Smith et al., 2020).'
+    start = text.index('Smith et al., 2020')
+    spans = [(start, len('Smith et al., 2020'), 'xref', {'ref-type': 'bibr'})]
+
+    new_text, kept_spans = _clean_citations(text, spans)
+
+    assert new_text == text
+    assert kept_spans == spans

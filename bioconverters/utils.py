@@ -8,15 +8,16 @@ from spans_and_trees import spans_to_passages, spans_to_tree, tree_to_spans
 
 
 # Remove empty brackets (that could happen if the contents have been removed already
-# e.g. for citation ( [] [] ) -> ( ) -> nothing
+# e.g. for citation ( [] [] ) -> ( ) -> nothing). Also eats one adjacent leading space
+# along with the bracket group, so "word ( )." doesn't leave "word ." behind.
 def _remove_brackets_without_words(text: str) -> str:
     changed = True
     previous_text = text
     fixed = text
     while changed:
-        fixed = re.sub(r"\([^\w\t]*\)", "", previous_text)
-        fixed = re.sub(r"\[[^\w\t]*\]", "", fixed)
-        fixed = re.sub(r"\{[^\w\t]*\}", "", fixed)
+        fixed = re.sub(r"\s?\([^\w\t]*\)", "", previous_text)
+        fixed = re.sub(r"\s?\[[^\w\t]*\]", "", fixed)
+        fixed = re.sub(r"\s?\{[^\w\t]*\}", "", fixed)
         changed = bool(previous_text != fixed)
         previous_text = fixed
     return fixed
@@ -86,13 +87,12 @@ _BRACKET_PAIRS = {"(": ")", "[": "]"}
 
 def _blank_bracketed_xrefs(text: str, spans: list) -> tuple:
     """
-    Blank out xref content that reads as clutter once left in plain text: an xref whose own
-    text is wrapped in "[...]" (e.g. "[1]"), or one that's the sole content of a surrounding
-    "(...)"/"[...]" (e.g. "(Table 1)"). The surrounding-wrapper case takes priority and
-    blanks the whole wrapper, so a "double-wrapped" reference like "([1])" doesn't leave an
-    empty "()" behind. Mixed ("(see Table 1)"), grouped ("(Figure 7 and Table 3)"), or
-    mismatched ("[Table 1)") wrappers are left untouched. Preserves length so no span-offset
-    adjustment is needed.
+    Blank out an xref that's the sole content of a surrounding "(...)"/"[...]" wrapper (e.g.
+    "(Table 1)"), wrapper included. Mixed ("(see Table 1)"), grouped ("(Figure 7 and Table
+    3)"), or mismatched ("[Table 1)") wrappers are left untouched. (A bibr citation whose own
+    content is already bracketed, e.g. "[1]", is handled separately by _clean_citations,
+    which runs first - by the time this runs, such spans are already blanked and gone.)
+    Preserves length so no span-offset adjustment is needed.
     """
     new_text = text
     kept_spans = []
@@ -103,8 +103,6 @@ def _blank_bracketed_xrefs(text: str, spans: list) -> tuple:
             continue
 
         end = start + length
-        xref_text = text[start:end].strip()
-        content_bracketed = xref_text.startswith("[") and xref_text.endswith("]")
 
         before_idx = start - 1
         while before_idx >= 0 and text[before_idx].isspace():
@@ -126,7 +124,40 @@ def _blank_bracketed_xrefs(text: str, spans: list) -> tuple:
             new_text = new_text[:blank_start] + " " * (blank_end - blank_start) + new_text[blank_end:]
             continue
 
-        if content_bracketed:
+        kept_spans.append((start, length, tag, attrib))
+
+    return new_text, kept_spans
+
+
+_CITATION_NUMBER_RE = re.compile(r"^\[?\s*\d+(?:\s*[,;\-–—]\s*\d+)*\s*\]?$")
+
+
+def _clean_citations(text: str, spans: list) -> tuple:
+    """
+    Blank out any bibr xref (ref-type="bibr") whose own text is purely numeric, or numeric
+    wrapped in square brackets - e.g. "1", "1,2,3", "1-3", "[1]", "[1,2,3]" - regardless of
+    what (if anything) surrounds it in the text. Unlike _blank_bracketed_xrefs, no
+    surrounding context is required: this is what catches a citation marker glued directly
+    onto a word with no separating space at all (e.g. "tuberculosis<xref><sup>1</sup>
+    </xref>" -> "tuberculosis1" if left unblanked), which can't be detected by looking at
+    context since there isn't any.
+
+    An author-date citation (e.g. "Smith et al., 2020") isn't purely numeric, so it's left
+    untouched - unlike a bare reference number, it's still informative without the full
+    reference resolved. Preserves length so no span-offset adjustment is needed.
+    """
+    new_text = text
+    kept_spans = []
+
+    for start, length, tag, attrib in spans:
+        if tag != "xref" or attrib.get("ref-type") != "bibr":
+            kept_spans.append((start, length, tag, attrib))
+            continue
+
+        end = start + length
+        xref_text = text[start:end].strip()
+
+        if _CITATION_NUMBER_RE.match(xref_text):
             new_text = new_text[:start] + " " * length + new_text[end:]
             continue
 
@@ -185,7 +216,9 @@ def _extract_passages(
     keep_tags,
     return_xml,
     trim_buggy_sentences,
+    clean_citations: bool = False,
     clean_xrefs_in_brackets: bool = False,
+    clear_empty_brackets: bool = False,
     fix_exponentials: bool = False,
 ):
     """
@@ -200,7 +233,13 @@ def _extract_passages(
         keep_tags: tags whose spans are preserved while building each passage
         return_xml: return marked-up XML strings if True, plain unescaped text if False
         trim_buggy_sentences: trim overly long, unbroken runs of text (see _trim_buggy_sentences)
+        clean_citations: drop a numeric bibr citation marker outright, regardless of context
+            (see _clean_citations). Runs before clean_xrefs_in_brackets.
         clean_xrefs_in_brackets: drop bracket-wrapped xref clutter (see _blank_bracketed_xrefs)
+        clear_empty_brackets: remove any "(...)"/"[...]"/"{...}" left containing no word
+            characters, e.g. from clean_citations/clean_xrefs_in_brackets, or from an
+            unrelated ignore_tag (like ext-link) that happened to be parenthesised (see
+            _remove_brackets_without_words)
         fix_exponentials: with return_xml=False, recover a digit-preceded numeric "<sup>" as
             "^N" (see _fix_exponentials) - requires "sup" in keep_tags, and has no effect
             when return_xml=True since the tag is already preserved as real markup then
@@ -212,6 +251,8 @@ def _extract_passages(
     for elem in elements:
         text, spans = tree_to_spans(elem)
         text = _cleanup_pmc_text(text)
+        if clean_citations:
+            text, spans = _clean_citations(text, spans)
         if clean_xrefs_in_brackets:
             text, spans = _blank_bracketed_xrefs(text, spans)
         for passage in spans_to_passages(text, spans, ignore_tags, split_tags, keep_tags):
@@ -221,11 +262,20 @@ def _extract_passages(
 
             tree = spans_to_tree(passage_text, passage["spans"])
             xml_string = _tree_to_xml_string(tree)
-            xml_string = _collapse_whitespace(xml_string)
 
             if not return_xml and fix_exponentials:
                 xml_string = _fix_exponentials(xml_string)
 
-            results.append(xml_string if return_xml else _strip_markup(xml_string))
+            result_text = xml_string if return_xml else _strip_markup(xml_string)
+            # Collapse whitespace after markup is stripped, not before: a blanked xref
+            # inside a kept tag (e.g. clean_citations blanking "<sup><xref>1</xref></sup>"
+            # to "<sup> </sup>") can leave two spaces that are only adjacent once the tag
+            # itself is gone, so collapsing earlier would miss them.
+            result_text = _collapse_whitespace(result_text)
+
+            if clear_empty_brackets:
+                result_text = _remove_brackets_without_words(result_text)
+
+            results.append(result_text)
 
     return results

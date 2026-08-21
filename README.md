@@ -123,7 +123,7 @@ Some XML tags convey meaningful information and text looks horrible without the 
 There are two options:
 
 1. If you want plain text, tags are stripped automatically. But the `fix_exponentials` flag (default `True`) tries to spot cases where an exponential can be nicely cleaned up (e.g. to `"3x10^8 m/s"`).
-2. Or work with a modified XML format that keeps some of the formatting tags, by passing `return_xml=True` to `parse_pmcxml`. Which tags survive is controlled by `keep_tags`, which defaults to the `pmc_constants.PMC_KEEP_TAGS` list of tags. This list includes `<sup>`, `<sub>` and others.
+2. Work with a modified XML format that keeps some of the formatting tags, by passing `return_xml=True` to `parse_pmcxml`. Which tags survive is controlled by `keep_tags`, which defaults to the `pmc_constants.PMC_KEEP_TAGS` list of tags. This list includes `<sup>`, `<sub>` and others.
 
 ## Getting citation info with `inject_citations`
 
