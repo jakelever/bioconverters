@@ -115,14 +115,14 @@ This also handles a "double-wrapped" reference, where the xref's own bracketed c
 
 The wrapper case only fires when the xref fills it on its own and the punctuation matches on both sides (both round or both square) - a mixed reference like `"(see Table 1)"`, a grouped one like `"(Figure 7 and Table 3)"`, or mismatched punctuation like `"[Table 1)"` is left untouched, since none of those read as a bare wrapper around the reference.
 
-## Keeping some formatting
+## Handling lost formatting
 
 Some XML tags convey meaningful information and text looks horrible without the formatting they provide. For instance, a PMC article may contain `"3x10<sup>8</sup> m/s"`. If we remove those tags, it becomes `"3x108 m/s"` which is obviously wrong.
 
 There are two options:
 
-1. If you want plain text, tags are stripped automatically. But the `fix_exponentials` flag (default `True` for the `*2txt`/`*2bioc` methods, `False` for `parse_pmcxml`/`parse_pubmedxml`) tries to spot cases where an exponential can be nicely cleaned up to `"3x10^8 m/s"`. It only fires when a `<sup>` is immediately preceded by a digit *and* its own content is itself a number - this deliberately excludes an ordinal suffix (`"1<sup>st</sup>"`, content isn't numeric) and an isotope prefix (`"<sup>14</sup>C"`, not preceded by a digit), both of which already read correctly as plain concatenation (`"1st"`, `"14C"`) and would be broken by blindly inserting a `^`.
-2. Or work with a modified XML format that keeps some of the formatting tags. `parse_pmcxml` does this, controlled by the `return_xml` boolean flag and `keep_tags`, which defaults to the `pmc_constants.PMC_KEEP_TAGS` list of tags. This list includes `<sup>`, `<sub>` and others.
+1. If you want plain text, tags are stripped automatically. But the `fix_exponentials` flag (default `True` for the `*2txt`/`*2bioc` methods, `False` for `parse_pmcxml`/`parse_pubmedxml`) tries to spot cases where an exponential can be nicely cleaned up (e.g. to `"3x10^8 m/s"`).
+2. Work with a modified XML format that keeps some of the formatting tags. `parse_pmcxml` does this, controlled by the `return_xml` boolean flag and `keep_tags`, which defaults to the `pmc_constants.PMC_KEEP_TAGS` list of tags. This list includes `<sup>`, `<sub>` and others.
 
 ## Getting citation info with `inject_citations`
 
