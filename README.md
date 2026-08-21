@@ -127,7 +127,7 @@ There are two options:
 
 ## Getting citation info with `inject_citations`
 
-PMC articles cite references with `<xref ref-type="bibr" rid="...">1</xref>`, where `rid` points at a `<ref>` in the back-matter `<ref-list>`. With `inject_citations=True` (default `False`), the information is pulled from the bibliography so no cross-referencing is needed.
+This relates to getting XML format (with `return_xml=True`). PMC articles cite references with `<xref ref-type="bibr" rid="...">1</xref>`, where `rid` points at a `<ref>` in the back-matter `<ref-list>`. With `inject_citations=True` (default `False`), the information is pulled from the bibliography so no cross-referencing is needed.
 
 The referenced pub-ids (e.g. `pmid`, `doi`) and a `count` of how many references are added as attributes:
 
