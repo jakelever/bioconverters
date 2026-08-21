@@ -38,7 +38,7 @@ PMC_KEEP_TAGS = {
 	"strike",
 }
 
-PMC_ALLOWED_SUBSECTIONS = {
+PMC_RECOGNIZED_SUBSECTION_HEADINGS = {
 	"abbreviations",
 	"additional information",
 	"analysis",

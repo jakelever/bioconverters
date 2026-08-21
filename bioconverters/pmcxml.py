@@ -12,7 +12,7 @@ except ImportError:
 
 import bioc
 
-from .pmc_tags import PMC_ALLOWED_SUBSECTIONS, PMC_IGNORE_TAGS, PMC_KEEP_TAGS, PMC_SPLIT_TAGS
+from .pmc_tags import PMC_RECOGNIZED_SUBSECTION_HEADINGS, PMC_IGNORE_TAGS, PMC_KEEP_TAGS, PMC_SPLIT_TAGS
 from .utils import _extract_passages, _format_metadata_header, _remove_brackets_from_titles
 
 _MONTH_NAME_TO_NUMBER = {m: i for i, m in enumerate(calendar.month_name)}
@@ -118,7 +118,7 @@ def _inject_citations(article_elem, citation_lookup) -> None:
 def _assign_subsections(text_sources: TextSource) -> None:
     """
     Walk each group of passages in document order, tagging each with the most recently seen
-    subsection heading (e.g. "methods", "discussion") from PMC_ALLOWED_SUBSECTIONS, if any.
+    subsection heading (e.g. "methods", "discussion") from PMC_RECOGNIZED_SUBSECTION_HEADINGS, if any.
     Matches against the passage's tag-stripped text, since a heading might have keep_tags
     markup embedded (e.g. an italicized word) that would otherwise prevent an exact match.
     """
@@ -127,7 +127,7 @@ def _assign_subsections(text_sources: TextSource) -> None:
         for passage in passages:
             plain_text = _TAG_RE.sub("", passage["text"])
             subsection_check = plain_text.lower().strip("01234567890. ")
-            if subsection_check in PMC_ALLOWED_SUBSECTIONS:
+            if subsection_check in PMC_RECOGNIZED_SUBSECTION_HEADINGS:
                 subsection = subsection_check
             passage["subsection"] = subsection
 
