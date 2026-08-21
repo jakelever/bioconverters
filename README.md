@@ -93,22 +93,6 @@ Notable flags:
 
 Text is extracted using [spans_and_trees](https://github.com/jakelever/spans_and_trees). Table content is omitted from extracted text. Overly long, unbroken runs of text are automatically trimmed to a maximum length (controlled by the `trim_buggy_sentences` flag).
 
-## Getting citation info with `inject_citations`
-
-PMC articles cite references with `<xref ref-type="bibr" rid="...">1</xref>`, where `rid` points at a `<ref>` in the back-matter `<ref-list>`. With `inject_citations=True` (the default for `parse_pmcxml`), the information is pulled from the bibliography so no cross-referencing is needed! The default for methods is False.
-
-The referenced pub-ids (e.g. `pmid`, `doi`) and a `count` of how many references are added as attributes:
-
-```xml
-<!-- before -->
-<xref ref-type="bibr" rid="r2 r3">2,3</xref>
-
-<!-- after -->
-<citation pmid="222|333" count="2">2,3</citation>
-```
-
-A grouped citation (multiple `rid`s, e.g. "[2,3]") gets its pub-id values `|`-joined, with `count` telling you how many references were bundled without needing to split them yourself.
-
 ## Cleaning up text with `clean_xrefs_in_brackets`
 
 The text can contain some extra apparent clutter such as cross-references in parentheses and citations in square brackets. The `clean_xrefs_in_brackets` argument removes both, which can a good idea to remove these (for easier text processing). This is the default for `pmcxml2txt` and not for other methods.
@@ -127,3 +111,29 @@ after:  "...reported in various solid cancers. Analogous mutations..."
 ```
 
 The parenthetical case only fires when the xref fills the parentheses on its own - a mixed reference like `"(see Table 1)"` or a grouped one like `"(Figure 7 and Table 3)"` is left untouched, since the reference reads as part of the sentence in those cases.
+
+## Keeping some formatting
+
+Some XML tags convey meaningful information and text looks horrible without the formatting they provide. For instance, a PMC article may contain "3x10<sup>8</sup> m/s". If we remove those tags, it becomes "3x108 m/s" which is obviously wrong.
+
+There are two options:
+
+1. If you want plain text, tags are stripped automatically. But the `fix_exponentials` (default=True for *2txt and *2bioc) methods, tries to spot cases where an exponential can be nicely cleaned to "3x10^8 m/s"
+2. Or work with a modified XML format that keep some of the formatting tags. The `parse_pmcxml` does this and its behaviour is controlled by the `return_xml` boolean flag and `keep_tags` which defaults to the `pmc_constants.PMC_KEEP_TAGS` list of tags. This list includes <sup>, <sub> and others. 
+
+
+## Getting citation info with `inject_citations`
+
+PMC articles cite references with `<xref ref-type="bibr" rid="...">1</xref>`, where `rid` points at a `<ref>` in the back-matter `<ref-list>`. With `inject_citations=True` (the default for `parse_pmcxml`), the information is pulled from the bibliography so no cross-referencing is needed! The default for methods is False.
+
+The referenced pub-ids (e.g. `pmid`, `doi`) and a `count` of how many references are added as attributes:
+
+```xml
+<!-- before -->
+<xref ref-type="bibr" rid="r2 r3">2,3</xref>
+
+<!-- after -->
+<citation pmid="222|333" count="2">2,3</citation>
+```
+
+A grouped citation (multiple `rid`s, e.g. "[2,3]") gets its pub-id values `|`-joined, with `count` telling you how many references were bundled without needing to split them yourself.
