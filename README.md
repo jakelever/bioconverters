@@ -95,16 +95,17 @@ Text is extracted using [spans_and_trees](https://github.com/jakelever/spans_and
 
 ## Cleaning up text with `clean_xrefs_in_brackets`
 
-The text can contain some extra apparent clutter such as cross-references in parentheses and citations in square brackets. The `clean_xrefs_in_brackets` argument removes both, which can a good idea to remove these (for easier text processing). This is the default for `pmcxml2txt` and not for other methods.
+The text can contain some extra apparent clutter such as cross-references in parentheses and citations in square brackets. The `clean_xrefs_in_brackets` argument removes both, which can be a good idea for easier text processing. This is the default for `pmcxml2txt` and not for other methods.
 
-Removing square brackets: 
+Removing square brackets:
 
 ```
 before: "...preferentially the active conformation[14]. Figure 5..."
 after:  "...preferentially the active conformation . Figure 5..."
 ```
 
-Removing cross-references in parenthesis:
+Removing cross-references in parentheses:
+
 ```
 before: "...reported in various solid cancers (Table 1). Analogous mutations..."
 after:  "...reported in various solid cancers. Analogous mutations..."
@@ -114,17 +115,16 @@ The parenthetical case only fires when the xref fills the parentheses on its own
 
 ## Keeping some formatting
 
-Some XML tags convey meaningful information and text looks horrible without the formatting they provide. For instance, a PMC article may contain "3x10<sup>8</sup> m/s". If we remove those tags, it becomes "3x108 m/s" which is obviously wrong.
+Some XML tags convey meaningful information and text looks horrible without the formatting they provide. For instance, a PMC article may contain `"3x10<sup>8</sup> m/s"`. If we remove those tags, it becomes `"3x108 m/s"` which is obviously wrong.
 
 There are two options:
 
-1. If you want plain text, tags are stripped automatically. But the `fix_exponentials` (default=True for *2txt and *2bioc) methods, tries to spot cases where an exponential can be nicely cleaned to "3x10^8 m/s"
-2. Or work with a modified XML format that keep some of the formatting tags. The `parse_pmcxml` does this and its behaviour is controlled by the `return_xml` boolean flag and `keep_tags` which defaults to the `pmc_constants.PMC_KEEP_TAGS` list of tags. This list includes <sup>, <sub> and others. 
-
+1. If you want plain text, tags are stripped automatically. But the `fix_exponentials` flag (default `True` for the `*2txt`/`*2bioc` methods) tries to spot cases where an exponential can be nicely cleaned up to `"3x10^8 m/s"`.
+2. Or work with a modified XML format that keeps some of the formatting tags. `parse_pmcxml` does this, controlled by the `return_xml` boolean flag and `keep_tags`, which defaults to the `pmc_constants.PMC_KEEP_TAGS` list of tags. This list includes `<sup>`, `<sub>` and others.
 
 ## Getting citation info with `inject_citations`
 
-PMC articles cite references with `<xref ref-type="bibr" rid="...">1</xref>`, where `rid` points at a `<ref>` in the back-matter `<ref-list>`. With `inject_citations=True` (the default for `parse_pmcxml`), the information is pulled from the bibliography so no cross-referencing is needed! The default for methods is False.
+PMC articles cite references with `<xref ref-type="bibr" rid="...">1</xref>`, where `rid` points at a `<ref>` in the back-matter `<ref-list>`. With `inject_citations=True` (the default for `parse_pmcxml`), the information is pulled from the bibliography so no cross-referencing is needed! The default is `False` for the other methods.
 
 The referenced pub-ids (e.g. `pmid`, `doi`) and a `count` of how many references are added as attributes:
 
