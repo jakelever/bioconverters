@@ -550,11 +550,6 @@ def pmcxml2txt(
 
         for section in sections:
             for passage in doc["text_sources"][section]:
-                if passage["text"]:  # pragma: no branch
-                    # Defensive: unlike pubmedxml2txt, nothing in the PMC pipeline applies
-                    # extra post-processing capable of reducing a passage to "" after
-                    # _extract_passages returns it (title/subtitle's _remove_brackets_from_titles
-                    # always keeps at least a "."), so the False path shouldn't be reachable.
-                    parts.append(passage["text"])
+                parts.append(passage["text"])
 
         yield passage_separator.join(parts)

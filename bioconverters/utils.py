@@ -199,14 +199,6 @@ def _extract_passages(
             xml_string = _tree_to_xml_string(tree)
             xml_string = _collapse_whitespace(xml_string)
 
-            if not xml_string:  # pragma: no cover
-                # Defensive: spans_to_passages already strips and drops any passage whose
-                # text is blank (see its own "if passage_text:" check), so passage_text -
-                # and therefore xml_string, which is built from it - should never actually
-                # be empty here. Kept as a guard rather than an assert in case that
-                # invariant ever changes.
-                continue
-
             results.append(xml_string if return_xml else _strip_markup(xml_string))
 
     return results
