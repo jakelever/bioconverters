@@ -86,26 +86,13 @@ _BRACKET_PAIRS = {"(": ")", "[": "]"}
 
 def _blank_bracketed_xrefs(text: str, spans: list) -> tuple:
     """
-    Blank out xref content that reads as clutter once left in plain text. Two checks feed
-    into one blanking decision per xref:
-
-    1. Content check: is the xref's own text already wrapped in square brackets (e.g.
-       "[1]", "[1,2]")? Determined purely from the xref's own text, no surrounding context
-       needed.
-    2. Context check: is the xref immediately adjacent (aside from whitespace) to a
-       matching pair of "(...)" or "[...]" in the surrounding text, with nothing else
-       inside? E.g. "(Table 1)" or "[Table 1]". Mismatched punctuation (e.g. "(Table 1]")
-       doesn't count. A mixed parenthetical like "(see Table 1)" or a grouped one like
-       "(Figure 7 and Table 3)" is left untouched, since neither is a bare wrapper.
-
-    If the context check matches, the whole outer wrapper is blanked (this also covers the
-    "double-wrapped" case, e.g. "([1])", where the xref's own bracketed content sits inside
-    a further pair - blanking the wider range avoids leaving a dangling empty "()" behind).
-    Otherwise, if only the content check matches, just the xref's own text is blanked (e.g.
-    "shown previously [1]." -> "shown previously.", with no wrapper to widen the blank to).
-
-    Preserves length (spaces get collapsed later) so no span-offset adjustment is needed
-    for the remaining spans.
+    Blank out xref content that reads as clutter once left in plain text: an xref whose own
+    text is wrapped in "[...]" (e.g. "[1]"), or one that's the sole content of a surrounding
+    "(...)"/"[...]" (e.g. "(Table 1)"). The surrounding-wrapper case takes priority and
+    blanks the whole wrapper, so a "double-wrapped" reference like "([1])" doesn't leave an
+    empty "()" behind. Mixed ("(see Table 1)"), grouped ("(Figure 7 and Table 3)"), or
+    mismatched ("[Table 1)") wrappers are left untouched. Preserves length so no span-offset
+    adjustment is needed.
     """
     new_text = text
     kept_spans = []
@@ -153,15 +140,10 @@ _EXPONENT_RE = re.compile(r"(?<=\d)<sup[^>]*>(-?\d+)</sup>")
 
 def _fix_exponentials(xml_string: str) -> str:
     """
-    Replace "<sup>N</sup>" with "^N" wherever it's immediately preceded by a digit and its
-    own content is itself a (possibly negative) integer, e.g. "10<sup>8</sup>" -> "10^8" -
-    recovers the exponent's meaning that would otherwise be lost once markup is stripped
-    (e.g. "10<sup>8</sup>" -> "108", silently wrong).
-
-    Left alone otherwise - an ordinal suffix ("1<sup>st</sup>") isn't numeric content, and
-    an isotope prefix ("<sup>14</sup>C") isn't preceded by a digit, so neither qualifies and
-    both fall through to being stripped down to plain concatenation as before ("1st", "14C"),
-    which is already correct for those cases.
+    Replace "<sup>N</sup>" with "^N" when N is numeric and immediately preceded by a digit,
+    e.g. "10<sup>8</sup>" -> "10^8" (plain concatenation alone would give "108"). An ordinal
+    suffix ("1<sup>st</sup>") or isotope prefix ("<sup>14</sup>C") won't match, so both fall
+    through unchanged - already correct as plain concatenation.
     """
     return _EXPONENT_RE.sub(r"^\1", xml_string)
 
@@ -208,9 +190,8 @@ def _extract_passages(
 ):
     """
     Flatten a list of XML elements into cleaned-up passages, one string per passage. With
-    return_xml=True, any keep_tags spans are preserved as inline markup (e.g. "some
-    <sup>1</sup>H text"). With return_xml=False, the result is plain, unescaped text with
-    any markup stripped.
+    return_xml=True, keep_tags spans are preserved as inline markup (e.g. "some
+    <sup>1</sup>H text"); with return_xml=False, the result is plain, unescaped text.
 
     Args:
         elements: an XML element, or a list of XML elements, to be processed
@@ -219,13 +200,10 @@ def _extract_passages(
         keep_tags: tags whose spans are preserved while building each passage
         return_xml: return marked-up XML strings if True, plain unescaped text if False
         trim_buggy_sentences: trim overly long, unbroken runs of text (see _trim_buggy_sentences)
-        clean_xrefs_in_brackets: drop xref content that's either wrapped in "[...]" itself,
-            or the sole content of a surrounding "(...)"/"[...]" (see _blank_bracketed_xrefs)
-        fix_exponentials: with return_xml=False, replace a numeric "<sup>" immediately
-            preceded by a digit with "^N" instead of losing it to plain concatenation (see
-            _fix_exponentials). Requires "sup" to be in keep_tags, otherwise there's no
-            markup left by this point to detect. Has no effect when return_xml=True, since
-            the "<sup>" tag itself is already preserved as real markup in that case.
+        clean_xrefs_in_brackets: drop bracket-wrapped xref clutter (see _blank_bracketed_xrefs)
+        fix_exponentials: with return_xml=False, recover a digit-preceded numeric "<sup>" as
+            "^N" (see _fix_exponentials) - requires "sup" in keep_tags, and has no effect
+            when return_xml=True since the tag is already preserved as real markup then
     """
     if not isinstance(elements, list):
         elements = [elements]

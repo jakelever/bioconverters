@@ -154,14 +154,10 @@ def parse_pubmedxml(
     """
     Args:
         source: path to the MEDLINE xml file
-        fix_exponentials: replace a numeric "<sup>" immediately preceded by a digit with
-            "^N" instead of losing it to plain concatenation, e.g. "10<sup>8</sup> m/s" ->
-            "10^8 m/s" (plain concatenation alone would silently give the wrong value,
-            "108 m/s"). An ordinal suffix ("1<sup>st</sup>") isn't numeric content, and an
-            isotope prefix ("<sup>14</sup>C") isn't preceded by a digit, so neither
-            qualifies and both come through unchanged ("1st", "14C"), which is already
-            correct for those cases. Default False here (unlike pubmedxml2txt/
-            pubmedxml2bioc).
+        fix_exponentials: recover a digit-preceded numeric "<sup>" as "^N" instead of losing
+            it to plain concatenation, e.g. "10<sup>8</sup>" -> "10^8" (see
+            bioconverters.utils._fix_exponentials). Default False here (unlike
+            pubmedxml2txt/pubmedxml2bioc).
     """
     for event, elem in etree.iterparse(source, events=("start", "end", "start-ns", "end-ns")):
         if event == "end" and elem.tag == "PubmedArticle":  # MedlineCitation'):

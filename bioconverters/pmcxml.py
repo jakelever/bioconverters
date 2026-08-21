@@ -95,15 +95,11 @@ def _build_citation_lookup(article_elem):
 
 def _inject_citations(article_elem, citation_lookup) -> None:
     """
-    For every in-text <xref ref-type="bibr"> citation, look up its pub-id values (e.g.
-    pmid, doi) by rid and set them as attributes directly on the element. Handles xrefs
-    referencing multiple ids (space-separated rid, e.g. a grouped "[1,2,3]" citation) by
-    joining multiple found values for the same pub-id-type with "|", and sets a "count"
-    attribute to the number of rids bundled in the xref, so a grouped citation is easy to
-    identify without having to split the "|"-joined values yourself. Retags matching
-    elements to "citation" (from "xref") so they can be selectively kept - with their now-
-    enriched attributes - separately from other xref types (e.g. figure/table references),
-    which stay dropped as before.
+    For every in-text <xref ref-type="bibr"> citation, look up its pub-id values (e.g. pmid,
+    doi) by rid and set them as attributes, joining multiple rids' values with "|" and
+    setting "count" to how many were bundled (e.g. a grouped "[1,2,3]" citation). Retags
+    matching elements from "xref" to "citation" so they can be kept separately from other
+    xref types (e.g. figure/table references), which stay dropped as before.
 
     Call this once, on the whole top-level <article> element, before any per-section
     extraction - sub-articles typically don't have their own <ref-list> and rely on the
@@ -391,41 +387,15 @@ def parse_pmcxml(
             or as plain, unescaped text with any markup stripped if False.
         trim_buggy_sentences: trim overly long, unbroken runs of text to a maximum length,
             to avoid issues with buggy sentences in some PMC articles.
-        inject_citations: for each in-text <xref ref-type="bibr"> citation, look up its
-            referenced <ref>'s pub-id values (e.g. pmid, doi) and add them as attributes,
-            retagged to <citation>, e.g. <citation pmid="12345678" count="1">1</citation>.
-            A grouped citation (e.g. "[2,3]") gets its values "|"-joined and count="2",
-            so callers can tell it's bundled without splitting the values themselves. These
-            are then kept in the output (with the citation marker text visible) instead of
-            being dropped like other ignored tags - this affects return_xml=False output
-            too, since the citation marker text is no longer blanked (though the injected
-            attributes themselves don't survive being stripped down to plain text).
-        clean_xrefs_in_brackets: drop xref content that reads as clutter once left in
-            plain text. Two checks feed into one blanking decision per xref: (1) is the
-            xref's own content already wrapped in square brackets (e.g. "[1]", "[1,2]")?
-            determined from the xref's own content alone, regardless of what surrounds it;
-            (2) is the xref the sole content of a surrounding "(...)" or "[...]" (e.g.
-            "(Table 1)", "[Fig. 2]")? If the surrounding-wrapper check matches, the whole
-            wrapper is dropped, avoiding dangling text like "shown in ." left behind by an
-            otherwise-blanked xref - this also covers a "double-wrapped" reference like
-            "([1])", where dropping just the inner "[1]" would leave an empty "()" behind.
-            If only the xref's own content is bracketed, with no surrounding wrapper, just
-            that content is dropped (e.g. "shown previously [1]." -> "shown previously.").
-            The surrounding-wrapper check only fires when the xref fills it on its own and
-            the punctuation on each side matches (both round or both square); mixed ("(see
-            Table 1)"), grouped ("(Figure 7 and Table 3)"), or mismatched ("[Table 1)")
-            wrappers are left untouched. Default False here (unlike pmcxml2txt), since this
-            can remove citation markers that the caller may still want visible in
-            return_xml=True/inline-markup output.
-        fix_exponentials: with return_xml=False, replace a numeric "<sup>" immediately
-            preceded by a digit with "^N" instead of losing it to plain concatenation, e.g.
-            "10<sup>8</sup> m/s" -> "10^8 m/s" (plain concatenation alone would silently
-            give the wrong value, "108 m/s"). An ordinal suffix ("1<sup>st</sup>") isn't
-            numeric content, and an isotope prefix ("<sup>14</sup>C") isn't preceded by a
-            digit, so neither qualifies and both come through unchanged ("1st", "14C"),
-            which is already correct for those cases. Has no effect when return_xml=True,
-            since the "<sup>" tag itself is already preserved as real markup in that case.
-            Default False here (unlike pmcxml2txt/pmcxml2bioc).
+        inject_citations: resolve each in-text bibr citation's pmid/doi and retag it to
+            <citation>, kept in the output instead of dropped (see _inject_citations).
+        clean_xrefs_in_brackets: drop bracket-wrapped xref clutter, e.g. "(Table 1)" or a
+            citation marker already in its own "[1]" (see _blank_bracketed_xrefs). Default
+            False here (unlike pmcxml2txt), since it can remove text the caller may still
+            want visible.
+        fix_exponentials: with return_xml=False, recover a digit-preceded numeric "<sup>"
+            as "^N" instead of losing it to plain concatenation, e.g. "10<sup>8</sup>" ->
+            "10^8" (see _fix_exponentials). Default False here (unlike pmcxml2txt/pmcxml2bioc).
     """
     source = _apply_pmc_xlink_fix(source)
 
