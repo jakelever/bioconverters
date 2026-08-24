@@ -12,7 +12,7 @@ pip install bioconverters
 
 ## PubMed
 
-### `pubmedxml2txt` - plain text, one string per article
+### [`pubmedxml2txt`](https://jakelever.github.io/bioconverters/bioconverters.html#pubmedxml2txt) - plain text, one string per article
 
 ```python
 from bioconverters import pubmedxml2txt
@@ -24,7 +24,7 @@ for text in pubmedxml2txt('/path/to/medline.xml', include_metadata=True):
 
 Flags: `sections` (default `("title", "abstract")`), `include_metadata` (prepend a pmid/doi/year/journal/authors header), `passage_separator` (default `"\n\n"`).
 
-### `pubmedxml2bioc` - BioC documents
+### [`pubmedxml2bioc`](https://jakelever.github.io/bioconverters/bioconverters.html#pubmedxml2bioc) - BioC documents
 
 ```python
 from bioconverters import pubmedxml2bioc
@@ -36,7 +36,7 @@ for doc in pubmedxml2bioc('/path/to/medline.xml'):
 
 Flags: `sections` (default `("title", "abstract")`).
 
-### `parse_pubmedxml` - raw PubMedArticle objects, for everything else
+### [`parse_pubmedxml`](https://jakelever.github.io/bioconverters/bioconverters.html#parse_pubmedxml) - raw [`PubMedArticle`](https://jakelever.github.io/bioconverters/bioconverters.html#PubMedArticle) objects, for everything else
 
 ```python
 from bioconverters import parse_pubmedxml
@@ -58,7 +58,7 @@ Use this if you need fields `pubmedxml2txt`/`pubmedxml2bioc` don't expose, like 
 
 ## PMC
 
-### `pmcxml2txt` - plain text, one string per article/sub-article
+### [`pmcxml2txt`](https://jakelever.github.io/bioconverters/bioconverters.html#pmcxml2txt) - plain text, one string per article/sub-article
 
 ```python
 from bioconverters import pmcxml2txt
@@ -70,7 +70,7 @@ for text in pmcxml2txt('/path/to/pmc.xml', include_metadata=True):
 
 Flags: `sections` (default: all six of `title`, `subtitle`, `abstract`, `article`, `back`, `floating`), `include_metadata`, `passage_separator`, `trim_buggy_sentences`, `clean_numeric_citations`, `clean_xrefs_in_brackets`, `clear_empty_brackets`, `fix_exponentials` (cleanup flags described below).
 
-### `pmcxml2bioc` - BioC documents
+### [`pmcxml2bioc`](https://jakelever.github.io/bioconverters/bioconverters.html#pmcxml2bioc) - BioC documents
 
 ```python
 from bioconverters import pmcxml2bioc
@@ -82,7 +82,7 @@ for doc in pmcxml2bioc('/path/to/pmc.xml'):
 
 Flags: `sections` (default: all six of `title`, `subtitle`, `abstract`, `article`, `back`, `floating`), `trim_buggy_sentences`, `clean_numeric_citations`, `clean_xrefs_in_brackets`, `clear_empty_brackets`, `fix_exponentials` (cleanup flags described below).
 
-### `parse_pmcxml` - raw PMCArticle objects, with optional inline markup and citation control
+### [`parse_pmcxml`](https://jakelever.github.io/bioconverters/bioconverters.html#parse_pmcxml) - raw [`PMCArticle`](https://jakelever.github.io/bioconverters/bioconverters.html#PMCArticle) objects, with optional inline markup and citation control
 
 ```python
 from bioconverters import parse_pmcxml
