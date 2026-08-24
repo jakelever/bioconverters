@@ -567,7 +567,7 @@ def pmcxml2bioc(
 
 def pmcxml2txt(
     source: Union[str, TextIO],
-    sections: Iterable[str] = ("title", "abstract", "article"),
+    sections: Iterable[str] = ("title", "subtitle", "abstract", "article", "back", "floating"),
     include_metadata: bool = False,
     passage_separator: str = "\n\n",
     trim_buggy_sentences: bool = True,

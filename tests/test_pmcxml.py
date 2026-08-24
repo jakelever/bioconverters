@@ -266,6 +266,15 @@ def test_pmcxml2bioc_sections_default_includes_all_six_groups():
     assert set(default_sections) == {'title', 'subtitle', 'abstract', 'article', 'back', 'floating'}
 
 
+def test_pmcxml2txt_sections_default_matches_pmcxml2bioc():
+    import inspect
+
+    assert (
+        inspect.signature(pmcxml2txt).parameters['sections'].default
+        == inspect.signature(pmcxml2bioc).parameters['sections'].default
+    )
+
+
 def test_pmcxml2bioc_sections_filters_and_orders_passages():
     docs = list(pmcxml2bioc(StringIO(_TXT_XML), sections=('abstract',)))
     sections_seen = [p.infons['section'] for p in docs[0].passages]
