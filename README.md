@@ -12,7 +12,7 @@ pip install bioconverters
 
 ## PubMed
 
-### `pubmedxml2txt` [![api](https://img.shields.io/badge/api-docs-blue)](https://jakelever.github.io/bioconverters/bioconverters.html#pubmedxml2txt) - plain text, one string per article
+### `pubmedxml2txt` [[api]](https://jakelever.github.io/bioconverters/bioconverters.html#pubmedxml2txt) - plain text, one string per article
 
 ```python
 from bioconverters import pubmedxml2txt
@@ -22,7 +22,7 @@ for text in pubmedxml2txt('/path/to/medline.xml', include_metadata=True):
     ...
 ```
 
-### `pubmedxml2bioc` [![api](https://img.shields.io/badge/api-docs-blue)](https://jakelever.github.io/bioconverters/bioconverters.html#pubmedxml2bioc) - BioC documents
+### `pubmedxml2bioc` [[api]](https://jakelever.github.io/bioconverters/bioconverters.html#pubmedxml2bioc) - BioC documents
 
 ```python
 from bioconverters import pubmedxml2bioc
@@ -32,7 +32,10 @@ for doc in pubmedxml2bioc('/path/to/medline.xml'):
     ...
 ```
 
-### `parse_pubmedxml` [![api](https://img.shields.io/badge/api-docs-blue)](https://jakelever.github.io/bioconverters/bioconverters.html#parse_pubmedxml) - raw `PubMedArticle` objects, for everything else
+### `parse_pubmedxml` [[api]](https://jakelever.github.io/bioconverters/bioconverters.html#parse_pubmedxml) - document objects for the complete details
+
+This returns a `PubMedArticle` data structure with the various metadata and text fields. Check [the api](https://jakelever.github.io/bioconverters/bioconverters.html#PubMedArticle) for the full structure.
+
 
 ```python
 from bioconverters import parse_pubmedxml
@@ -54,7 +57,7 @@ Use this if you need fields `pubmedxml2txt`/`pubmedxml2bioc` don't expose, like 
 
 ## PMC
 
-### `pmcxml2txt` [![api](https://img.shields.io/badge/api-docs-blue)](https://jakelever.github.io/bioconverters/bioconverters.html#pmcxml2txt) - plain text, one string per article/sub-article
+### `pmcxml2txt` [[api]](https://jakelever.github.io/bioconverters/bioconverters.html#pmcxml2txt) - plain text, one string per article/sub-article
 
 ```python
 from bioconverters import pmcxml2txt
@@ -64,7 +67,7 @@ for text in pmcxml2txt('/path/to/pmc.xml', include_metadata=True):
     ...
 ```
 
-### `pmcxml2bioc` [![api](https://img.shields.io/badge/api-docs-blue)](https://jakelever.github.io/bioconverters/bioconverters.html#pmcxml2bioc) - BioC documents
+### `pmcxml2bioc` [[api]](https://jakelever.github.io/bioconverters/bioconverters.html#pmcxml2bioc) - BioC documents
 
 ```python
 from bioconverters import pmcxml2bioc
@@ -74,7 +77,9 @@ for doc in pmcxml2bioc('/path/to/pmc.xml'):
     ...
 ```
 
-### `parse_pmcxml` [![api](https://img.shields.io/badge/api-docs-blue)](https://jakelever.github.io/bioconverters/bioconverters.html#parse_pmcxml) - raw `PMCArticle` objects, with optional inline markup and citation control
+### `parse_pmcxml` [[api]](https://jakelever.github.io/bioconverters/bioconverters.html#parse_pmcxml) - document objects with optional inline markup and citation control
+
+This returns a `PMCArticle` data structure with the various metadata and text fields. Check [the api](https://jakelever.github.io/bioconverters/bioconverters.html#PMCArticle) for the full structure.
 
 ```python
 from bioconverters import parse_pmcxml
