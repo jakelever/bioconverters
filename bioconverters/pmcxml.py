@@ -2,18 +2,29 @@ import calendar
 import io
 import re
 import xml.etree.ElementTree as etree
-from typing import Dict, Iterable, Iterator, List, Optional, TextIO, Union
+from typing import Iterable, Iterator, TextIO, TypedDict, Union
 
 import bioc
 
 from .pmc_constants import PMC_IGNORE_TAGS, PMC_SPLIT_TAGS
-from .pmc_types import PMCArticle
+from .pmc_types import PMCArticle, _PMCMeta
 from .utils import _extract_passages, _format_metadata_header, _remove_brackets_from_titles
 
 _MONTH_NAME_TO_NUMBER = {m: i for i, m in enumerate(calendar.month_name)}
 _MONTH_NAME_TO_NUMBER.update({m: i for i, m in enumerate(calendar.month_abbr)})
 
 _CITATION_TAG = "citation"
+
+
+class _PmcContentFields(TypedDict):
+    """The six PMCArticle fields that `_extract_article_content` populates."""
+
+    title: str
+    subtitle: str
+    abstract: Iterable[str]
+    article: Iterable[str]
+    back: Iterable[str]
+    floating: Iterable[str]
 
 
 def _extract_pmc_passages(
@@ -102,7 +113,7 @@ def _extract_article_content(
     clean_xrefs_in_brackets,
     clear_empty_brackets,
     fix_exponentials,
-) -> Dict[str, Union[str, List[str]]]:
+) -> _PmcContentFields:
     """
     Given the XML element representing the top-level of the scientific article, extract all the text sources
     """
@@ -215,7 +226,7 @@ def _field_text(elem, tag):
     return field.text.strip().replace("\n", " ")
 
 
-def _get_meta_info_for_pmc_article(article_elem) -> Dict[str, Optional[Union[str, int]]]:
+def _get_meta_info_for_pmc_article(article_elem) -> _PMCMeta:
     # Attempt to extract the PubMed ID, PubMed Central ID and DOI
     id_map = {}
     article_id = article_elem.findall("./front/article-meta/article-id") + article_elem.findall(
@@ -293,16 +304,16 @@ def _get_meta_info_for_pmc_article(article_elem) -> Dict[str, Optional[Union[str
         if field.attrib.get("journal-id-type") == "iso-abbrev":
             journal_iso_text = field.text
 
-    return {
-        "pmid": pmid_text,
-        "pmcid": pmcid_text,
-        "doi": doi_text,
-        "pub_year": pub_year,
-        "pub_month": pub_month,
-        "pub_day": pub_day,
-        "journal": journal_text,
-        "journal_iso": journal_iso_text,
-    }
+    return _PMCMeta(
+        pmid=pmid_text,
+        pmcid=pmcid_text,
+        doi=doi_text,
+        pub_year=pub_year,
+        pub_month=pub_month,
+        pub_day=pub_day,
+        journal=journal_text,
+        journal_iso=journal_iso_text,
+    )
 
 
 def _apply_pmc_xlink_fix(source: Union[str, TextIO]) -> TextIO:
@@ -400,17 +411,17 @@ def parse_pmcxml(
                 else:
                     # Check if this subarticle has any distinguishing IDs and use them instead
                     sub_meta = _get_meta_info_for_pmc_article(article_elem)
-                    if not (sub_meta["pmid"] or sub_meta["pmcid"] or sub_meta["doi"]):
-                        sub_meta["pmid"] = meta["pmid"]
-                        sub_meta["pmcid"] = meta["pmcid"]
-                        sub_meta["doi"] = meta["doi"]
-                    if sub_meta["pub_year"] is None:
-                        sub_meta["pub_year"] = meta["pub_year"]
-                        sub_meta["pub_month"] = meta["pub_month"]
-                        sub_meta["pub_day"] = meta["pub_day"]
-                    if not sub_meta["journal"]:
-                        sub_meta["journal"] = meta["journal"]
-                        sub_meta["journal_iso"] = meta["journal_iso"]
+                    if not (sub_meta.pmid or sub_meta.pmcid or sub_meta.doi):
+                        sub_meta.pmid = meta.pmid
+                        sub_meta.pmcid = meta.pmcid
+                        sub_meta.doi = meta.doi
+                    if sub_meta.pub_year is None:
+                        sub_meta.pub_year = meta.pub_year
+                        sub_meta.pub_month = meta.pub_month
+                        sub_meta.pub_day = meta.pub_day
+                    if not sub_meta.journal:
+                        sub_meta.journal = meta.journal
+                        sub_meta.journal_iso = meta.journal_iso
 
                 content = _extract_article_content(
                     article_elem,
@@ -424,7 +435,17 @@ def parse_pmcxml(
                     fix_exponentials,
                 )
 
-                yield PMCArticle(**sub_meta, **content)
+                yield PMCArticle(
+                    pmid=sub_meta.pmid,
+                    pmcid=sub_meta.pmcid,
+                    doi=sub_meta.doi,
+                    pub_year=sub_meta.pub_year,
+                    pub_month=sub_meta.pub_month,
+                    pub_day=sub_meta.pub_day,
+                    journal=sub_meta.journal,
+                    journal_iso=sub_meta.journal_iso,
+                    **content,
+                )
 
             # Less important here (compared to abstracts) as each article file is not too big
             elem.clear()

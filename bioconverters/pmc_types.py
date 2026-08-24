@@ -5,9 +5,43 @@ _ALL_SECTIONS = ("title", "subtitle", "abstract", "article", "back", "floating")
 
 
 @dataclass
-class PMCArticle:
+class _PMCMeta:
+    """Metadata common to all PMC articles and sub-articles."""
+    
+    pmid: str
+    """PubMed ID, or an empty string if not found."""
+
+    pmcid: str
+    """PubMed Central ID, or an empty string if not found."""
+
+    doi: str
+    """DOI, or an empty string if not found."""
+
+    pub_year: Optional[str]
+    """Publication year, or None if not found."""
+
+    pub_month: Optional[Union[str, int]]
+    """Publication month, or None if not found."""
+
+    pub_day: Optional[str]
+    """Publication day, or None if not found."""
+
+    journal: str
+    """Journal title, or an empty string if not found."""
+
+    journal_iso: str
+    """ISO abbreviation of the journal title, or an empty string if not found."""
+
+
+@dataclass
+class PMCArticle(_PMCMeta):
     """One PMC article or sub-article, as extracted by `parse_pmcxml`."""
 
+    # Redeclared here (not just inherited from _PMCMeta) purely so pdoc documents them on
+    # this class - it doesn't inline a base class's fields into a subclass's page. Dataclass
+    # field order/behavior is unaffected: re-annotating an inherited field updates its type
+    # in place without moving it, since ordering is fixed by each name's first occurrence
+    # when walking the MRO.
     pmid: str
     """PubMed ID, or an empty string if not found."""
 
