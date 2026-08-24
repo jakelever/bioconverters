@@ -489,7 +489,10 @@ def parse_pmcxml(
 
 def pmcxml2bioc(
     source: Union[str, TextIO],
+    sections: Iterable[str] = ("title", "subtitle", "abstract", "article", "back", "floating"),
+    trim_buggy_sentences: bool = True,
     clean_numeric_citations: bool = True,
+    clean_xrefs_in_brackets: bool = True,
     clear_empty_brackets: bool = True,
     fix_exponentials: bool = True,
 ) -> Iterator[bioc.BioCDocument]:
@@ -498,7 +501,12 @@ def pmcxml2bioc(
 
     Args:
         source: The text or file handle containing the PMC XML
+        sections: which of the six text_sources groups ("title", "subtitle", "abstract",
+            "article", "back", "floating") to include as passages, and in what order.
+        trim_buggy_sentences: trim overly long, unbroken runs of text to a maximum length,
+            to avoid issues with buggy sentences in some PMC articles.
         clean_numeric_citations: see parse_pmcxml.
+        clean_xrefs_in_brackets: see parse_pmcxml.
         clear_empty_brackets: see parse_pmcxml.
         fix_exponentials: see parse_pmcxml.
 
@@ -514,7 +522,9 @@ def pmcxml2bioc(
             keep_tags=set(),
             return_xml=False,
             inject_citations=False,
+            trim_buggy_sentences=trim_buggy_sentences,
             clean_numeric_citations=clean_numeric_citations,
+            clean_xrefs_in_brackets=clean_xrefs_in_brackets,
             clear_empty_brackets=clear_empty_brackets,
             fix_exponentials=fix_exponentials,
         ):
@@ -534,8 +544,8 @@ def pmcxml2bioc(
 
             offset = 0
             text_source_groups = cast(Dict[str, List[dict]], pmc_doc["text_sources"])
-            for group_name, text_source_group in text_source_groups.items():
-                for passage_dict in text_source_group:
+            for group_name in sections:
+                for passage_dict in text_source_groups[group_name]:
                     text_source = passage_dict["text"]
 
                     passage = bioc.BioCPassage()

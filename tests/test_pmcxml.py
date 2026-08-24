@@ -170,6 +170,12 @@ def test_clean_xrefs_in_brackets_false_keeps_dangling_reference():
     assert 'shown in (Table 3) below' in text
 
 
+def test_pmcxml2bioc_clean_xrefs_in_brackets_false_keeps_dangling_reference():
+    docs = list(pmcxml2bioc(StringIO(_PARENTHETICAL_XREF_XML), clean_xrefs_in_brackets=False))
+    text = ' '.join(p.text for p in docs[0].passages)
+    assert 'shown in (Table 3) below' in text
+
+
 _SQUARE_BRACKET_XREF_XML = '''<article>
     <front><article-meta><article-id pub-id-type="pmid">1</article-id></article-meta></front>
     <body><p>Results were reported previously <xref ref-type="bibr" rid="r1">[1]</xref>. See Figure 1 for details.</p></body>
@@ -242,13 +248,28 @@ def test_pmcxml2txt_has_no_inject_citations_param():
 def test_flag_defaults_are_consistent_across_pmc_functions():
     import inspect
 
-    for func in (parse_pmcxml, pmcxml2txt):
+    for func in (parse_pmcxml, pmcxml2txt, pmcxml2bioc):
         params = inspect.signature(func).parameters
+        assert params['trim_buggy_sentences'].default is True
+        assert params['clean_numeric_citations'].default is True
         assert params['clean_xrefs_in_brackets'].default is True
+        assert params['clear_empty_brackets'].default is True
         assert params['fix_exponentials'].default is True
     assert inspect.signature(parse_pmcxml).parameters['inject_citations'].default is False
     assert inspect.signature(parse_pmcxml).parameters['return_xml'].default is False
-    assert inspect.signature(pmcxml2bioc).parameters['fix_exponentials'].default is True
+
+
+def test_pmcxml2bioc_sections_default_includes_all_six_groups():
+    import inspect
+
+    default_sections = inspect.signature(pmcxml2bioc).parameters['sections'].default
+    assert set(default_sections) == {'title', 'subtitle', 'abstract', 'article', 'back', 'floating'}
+
+
+def test_pmcxml2bioc_sections_filters_and_orders_passages():
+    docs = list(pmcxml2bioc(StringIO(_TXT_XML), sections=('abstract',)))
+    sections_seen = [p.infons['section'] for p in docs[0].passages]
+    assert sections_seen == ['abstract']
 
 
 _EXPONENTIAL_XML = '''<article>

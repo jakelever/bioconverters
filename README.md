@@ -72,6 +72,8 @@ for doc in pmcxml2bioc('/path/to/pmc.xml'):
     ...
 ```
 
+Flags: `sections` (default: all six of `title`, `subtitle`, `abstract`, `article`, `back`, `floating`), `trim_buggy_sentences`, `clean_numeric_citations`, `clean_xrefs_in_brackets`, `clear_empty_brackets`, `fix_exponentials` (cleanup flags described below).
+
 ### `parse_pmcxml` - raw dicts, with optional inline markup and citation control
 
 ```python
