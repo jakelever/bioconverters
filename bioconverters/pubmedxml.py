@@ -206,11 +206,10 @@ def parse_pubmedxml(
     Args:
         source: path to the MEDLINE xml file
         clear_empty_brackets: remove any "(...)"/"[...]"/"{...}" left containing no word
-            characters (see bioconverters.utils._remove_brackets_without_words).
+            characters.
         fix_exponentials: recover a digit-preceded numeric `<sup>` as "^N" instead of losing
-            it to plain concatenation, e.g. `"10<sup>8</sup>"` -> "10^8" (see
-            bioconverters.utils._fix_exponentials). Same default as pubmedxml2txt/
-            pubmedxml2bioc.
+            it to plain concatenation, e.g. `"10<sup>8</sup>"` -> "10^8". Same default as
+            pubmedxml2txt/pubmedxml2bioc.
     """
     for event, elem in etree.iterparse(source, events=("start", "end", "start-ns", "end-ns")):
         if event == "end" and elem.tag == "PubmedArticle":  # MedlineCitation'):

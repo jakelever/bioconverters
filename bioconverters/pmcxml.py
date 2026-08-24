@@ -7,7 +7,7 @@ from typing import Dict, Iterable, Iterator, List, Optional, TextIO, Union
 
 import bioc
 
-from .pmc_constants import PMC_IGNORE_TAGS, PMC_KEEP_TAGS, PMC_SPLIT_TAGS
+from .pmc_constants import PMC_IGNORE_TAGS, PMC_SPLIT_TAGS
 from .utils import _extract_passages, _format_metadata_header, _remove_brackets_from_titles
 
 _MONTH_NAME_TO_NUMBER = {m: i for i, m in enumerate(calendar.month_name)}
@@ -398,8 +398,8 @@ def _apply_pmc_xlink_fix(source: Union[str, TextIO]) -> TextIO:
 
 def parse_pmcxml(
     source: Union[str, TextIO],
-    keep_tags=PMC_KEEP_TAGS,
     return_xml: bool = False,
+    keep_tags=set(),
     trim_buggy_sentences: bool = True,
     inject_citations: bool = False,
     clean_numeric_citations: bool = True,
@@ -412,28 +412,29 @@ def parse_pmcxml(
 
     Args:
         source: The text or file handle containing the PMC XML
-        keep_tags: tags whose markup is preserved inline in each passage's text (e.g. "sup",
-            "italic") - pass an empty set for plain text with no markup.
         return_xml: return each passage's text as a marked-up XML string if True, or as
             plain, unescaped text with any markup stripped if False (default).
+        keep_tags: with return_xml=True, tags whose markup is preserved inline in each
+            passage's text (e.g. "sup", "italic") - has no effect when return_xml=False.
+            Defaults to an empty set (no markup kept). Pass `pmc_constants.PMC_KEEP_TAGS`
+            for the common formatting tags (sup, sub, italic, bold, underline, monospace,
+            sc, overline, strike).
         trim_buggy_sentences: trim overly long, unbroken runs of text to a maximum length,
             to avoid issues with buggy sentences in some PMC articles.
         inject_citations: resolve each in-text bibr citation's pmid/doi and retag it to
-            `<citation>`, kept in the output instead of dropped (see _inject_citations). Must
-            not be combined with clean_numeric_citations=True - injection enriches bibr citations,
+            `<citation>`, kept in the output instead of dropped. Must not be combined with
+            clean_numeric_citations=True - injection enriches bibr citations,
             clean_numeric_citations deletes them, so having both on is almost certainly a mistake.
         clean_numeric_citations: drop a numeric bibr citation marker outright, e.g. "1", "[1,2]",
             regardless of context - this is what catches a citation glued directly onto a
-            word with no separating space at all (see _clean_numeric_citations).
-        clean_xrefs_in_brackets: drop bracket-wrapped xref clutter, e.g. "(Table 1)" (see
-            _blank_bracketed_xrefs).
+            word with no separating space at all.
+        clean_xrefs_in_brackets: drop bracket-wrapped xref clutter, e.g. "(Table 1)".
         clear_empty_brackets: remove any "(...)"/"[...]"/"{...}" left containing no word
             characters, e.g. from clean_numeric_citations/clean_xrefs_in_brackets, or from an
-            unrelated ignore_tag (like ext-link) that happened to be parenthesised (see
-            _remove_brackets_without_words).
+            unrelated ignore_tag (like ext-link) that happened to be parenthesised.
         fix_exponentials: with return_xml=False, recover a digit-preceded numeric `<sup>`
             as "^N" instead of losing it to plain concatenation, e.g. `"10<sup>8</sup>"` ->
-            "10^8" (see _fix_exponentials).
+            "10^8".
 
     These defaults match pmcxml2bioc/pmcxml2txt, so behavior is consistent regardless of
     which entry point is used.
