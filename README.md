@@ -76,15 +76,16 @@ for doc in pmcxml2bioc('/path/to/pmc.xml'):
 
 Flags: `sections` (default: all six of `title`, `subtitle`, `abstract`, `article`, `back`, `floating`), `trim_buggy_sentences`, `clean_numeric_citations`, `clean_xrefs_in_brackets`, `clear_empty_brackets`, `fix_exponentials` (cleanup flags described below).
 
-### `parse_pmcxml` - raw dicts, with optional inline markup and citation control
+### `parse_pmcxml` - raw PMCArticle objects, with optional inline markup and citation control
 
 ```python
 from bioconverters import parse_pmcxml
 
 for article in parse_pmcxml('/path/to/pmc.xml'):
-    # a PMCArticle dict: pmid, pmcid, doi, pub_year/month/day, journal, journal_iso,
-    # and text_sources - a dict of title/subtitle/abstract/article/back/floating,
-    # each a list of {"text": ..., "subsection": ...} passages
+    # a PMCArticle dataclass: pmid, pmcid, doi, pub_year/month/day, journal, journal_iso,
+    # title (str), subtitle (str), and abstract/article/back/floating (each a list of str
+    # passages). article.iter_text(sections=...) yields the text of the given fields, in
+    # order, skipping any that are empty.
     ...
 ```
 

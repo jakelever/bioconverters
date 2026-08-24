@@ -65,7 +65,7 @@ def test_inject_citations_adds_pmid_doi_attributes():
             return_xml=True,
         )
     )
-    text = ' '.join(p['text'] for p in docs[0]['text_sources']['article'])
+    text = ' '.join(docs[0].article)
 
     # single-rid citation gets retagged to <citation> with its pmid/doi attributes, and a
     # count of 1
@@ -97,7 +97,7 @@ def test_inject_citations_and_clean_numeric_citations_together_raises():
 
 def test_inject_citations_false_drops_citations_like_before():
     docs = list(parse_pmcxml(StringIO(_CITATION_XML), inject_citations=False, return_xml=True))
-    text = ' '.join(p['text'] for p in docs[0]['text_sources']['article'])
+    text = ' '.join(docs[0].article)
     assert '<xref' not in text
     assert '<citation' not in text
     assert 'pmid=' not in text
@@ -139,8 +139,8 @@ def test_inject_citations_resolves_against_parent_ref_list_for_subarticles():
     )
     assert len(docs) == 2
     sub_doc = docs[1]
-    assert sub_doc['pmid'] == '2'
-    text = ' '.join(p['text'] for p in sub_doc['text_sources']['article'])
+    assert sub_doc.pmid == '2'
+    text = ' '.join(sub_doc.article)
     assert 'pmid="111"' in text
     assert '>1</citation>' in text
 
@@ -153,7 +153,7 @@ _PARENTHETICAL_XREF_XML = '''<article>
 
 def test_clean_xrefs_in_brackets_default_drops_standalone_parenthetical_reference():
     docs = list(parse_pmcxml(StringIO(_PARENTHETICAL_XREF_XML), inject_citations=False))
-    text = ' '.join(p['text'] for p in docs[0]['text_sources']['article'])
+    text = ' '.join(docs[0].article)
     assert 'shown in below' in text
     assert 'third row' in text  # unrelated plain-text mention still survives
 
@@ -166,7 +166,7 @@ def test_clean_xrefs_in_brackets_false_keeps_dangling_reference():
             clean_xrefs_in_brackets=False,
         )
     )
-    text = ' '.join(p['text'] for p in docs[0]['text_sources']['article'])
+    text = ' '.join(docs[0].article)
     assert 'shown in (Table 3) below' in text
 
 
@@ -186,7 +186,7 @@ def test_clean_numeric_citations_default_drops_own_content_in_square_brackets():
     # the bibr citation's own content "[1]" is dropped outright, regardless of surrounding
     # context (no parentheses needed, unlike the "(Table 1)" case)
     docs = list(parse_pmcxml(StringIO(_SQUARE_BRACKET_XREF_XML), inject_citations=False))
-    text = ' '.join(p['text'] for p in docs[0]['text_sources']['article'])
+    text = ' '.join(docs[0].article)
     # the citation sits directly before a sentence-ending period, so that period is pulled
     # back over the gap rather than leaving a dangling "previously ."
     assert 'reported previously.' in text
@@ -202,7 +202,7 @@ def test_clean_numeric_citations_false_keeps_own_content_in_square_brackets():
             clean_numeric_citations=False,
         )
     )
-    text = ' '.join(p['text'] for p in docs[0]['text_sources']['article'])
+    text = ' '.join(docs[0].article)
     assert 'reported previously [1].' in text
 
 
@@ -316,7 +316,7 @@ def test_malformed_article_ids_are_skipped():
     # an article-id with no pub-id-type attribute, or with no text, is ignored rather
     # than crashing or being picked up under the wrong key
     docs = list(parse_pmcxml(StringIO(_MALFORMED_ARTICLE_ID_XML), inject_citations=False))
-    assert docs[0]['pmid'] == ''
+    assert docs[0].pmid == ''
 
 
 _SEASON_PUBDATE_XML = '''<article>
@@ -332,7 +332,7 @@ def test_pub_month_resolved_from_season_field():
     # some PMC articles give the month as a "season" range (e.g. "Mar-Apr") instead of a
     # plain <month> field - the first recognized month name/abbreviation found in it is used
     docs = list(parse_pmcxml(StringIO(_SEASON_PUBDATE_XML), inject_citations=False))
-    assert docs[0]['pub_month'] == 3
+    assert docs[0].pub_month == 3
 
 
 _UNMATCHED_SEASON_NO_YEAR_XML = '''<article>
@@ -348,8 +348,8 @@ def test_pub_date_with_no_year_and_unmatched_season_stays_none():
     # a <pub-date> with no <year> at all, and a <season> that contains no recognizable
     # month name/abbreviation, should leave both fields as None rather than crashing
     docs = list(parse_pmcxml(StringIO(_UNMATCHED_SEASON_NO_YEAR_XML), inject_citations=False))
-    assert docs[0]['pub_year'] is None
-    assert docs[0]['pub_month'] is None
+    assert docs[0].pub_year is None
+    assert docs[0].pub_month is None
 
 
 _REF_LIST_EDGE_CASES_XML = '''<article>
@@ -376,7 +376,7 @@ def test_citation_lookup_skips_unidentifiable_refs():
             return_xml=True,
         )
     )
-    text = ' '.join(p['text'] for p in docs[0]['text_sources']['article'])
+    text = ' '.join(docs[0].article)
     # r2 gets retagged (ref-type="bibr") but has no pmid/doi attribute added, since nothing
     # in its ref-list entry was usable
     assert '<citation ref-type="bibr" rid="r2" count="1">a</citation>' in text
@@ -426,13 +426,13 @@ def test_subarticle_without_own_metadata_inherits_all_of_parents():
     docs = list(parse_pmcxml(StringIO(_SUBARTICLE_NO_OWN_METADATA_XML), inject_citations=False))
     assert len(docs) == 2
     sub_doc = docs[1]
-    assert sub_doc['pmid'] == '1'
-    assert sub_doc['pmcid'] == 'PMC1'
-    assert sub_doc['doi'] == '10.1/parent'
-    assert sub_doc['pub_year'] == '2021'
-    assert sub_doc['pub_month'] == '6'
-    assert sub_doc['pub_day'] == '15'
-    assert sub_doc['journal'] == 'Parent Journal'
+    assert sub_doc.pmid == '1'
+    assert sub_doc.pmcid == 'PMC1'
+    assert sub_doc.doi == '10.1/parent'
+    assert sub_doc.pub_year == '2021'
+    assert sub_doc.pub_month == '6'
+    assert sub_doc.pub_day == '15'
+    assert sub_doc.journal == 'Parent Journal'
 
 
 _SUBARTICLE_WITH_OWN_DATE_AND_JOURNAL_XML = '''<article>
@@ -460,9 +460,9 @@ def test_subarticle_with_own_date_and_journal_keeps_them():
     docs = list(parse_pmcxml(StringIO(_SUBARTICLE_WITH_OWN_DATE_AND_JOURNAL_XML), inject_citations=False))
     assert len(docs) == 2
     sub_doc = docs[1]
-    assert sub_doc['pmid'] == '1'  # inherited, since the sub-article has no article-id
-    assert sub_doc['pub_year'] == '2022'  # kept, not overwritten with the parent's 2021
-    assert sub_doc['journal'] == 'Sub Journal'  # kept, not overwritten with "Parent Journal"
+    assert sub_doc.pmid == '1'  # inherited, since the sub-article has no article-id
+    assert sub_doc.pub_year == '2022'  # kept, not overwritten with the parent's 2021
+    assert sub_doc.journal == 'Sub Journal'  # kept, not overwritten with "Parent Journal"
 
 
 def test_pmcxml2bioc_raises_runtime_error_on_malformed_xml():

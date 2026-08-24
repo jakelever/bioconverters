@@ -2,34 +2,22 @@ import calendar
 import io
 import re
 import xml.etree.ElementTree as etree
-from typing import Dict, Iterable, Iterator, List, Optional, TextIO, TypedDict, Union, cast
+from dataclasses import dataclass
+from typing import Dict, Iterable, Iterator, List, Optional, TextIO, Union
 
 import bioc
 
-from .pmc_constants import (
-    PMC_IGNORE_TAGS,
-    PMC_KEEP_TAGS,
-    PMC_RECOGNIZED_SUBSECTION_HEADINGS,
-    PMC_SPLIT_TAGS,
-)
+from .pmc_constants import PMC_IGNORE_TAGS, PMC_KEEP_TAGS, PMC_SPLIT_TAGS
 from .utils import _extract_passages, _format_metadata_header, _remove_brackets_from_titles
 
 _MONTH_NAME_TO_NUMBER = {m: i for i, m in enumerate(calendar.month_name)}
 _MONTH_NAME_TO_NUMBER.update({m: i for i, m in enumerate(calendar.month_abbr)})
 
-_TAG_RE = re.compile(r"<[^>]+>")
+_ALL_SECTIONS = ("title", "subtitle", "abstract", "article", "back", "floating")
 
 
-class TextSource(TypedDict):
-    title: Iterable[dict]
-    subtitle: Iterable[dict]
-    abstract: Iterable[dict]
-    article: Iterable[dict]
-    back: Iterable[dict]
-    floating: Iterable[dict]
-
-
-class PmcMeta(TypedDict):
+@dataclass
+class PMCArticle:
     pmid: str
     pmcid: str
     doi: str
@@ -39,9 +27,20 @@ class PmcMeta(TypedDict):
     journal: str
     journal_iso: str
 
+    title: str
+    subtitle: str
+    abstract: Iterable[str]
+    article: Iterable[str]
+    back: Iterable[str]
+    floating: Iterable[str]
 
-class PMCArticle(PmcMeta):
-    text_sources: TextSource
+    def iter_text(self, sections: Iterable[str] = _ALL_SECTIONS) -> Iterator[str]:
+        for section in sections:
+            value = getattr(self, section)
+            texts = (value,) if isinstance(value, str) else value
+            for text in texts:
+                if text:
+                    yield text
 
 
 _CITATION_TAG = "citation"
@@ -123,23 +122,6 @@ def _inject_citations(article_elem, citation_lookup) -> None:
         xref.tag = _CITATION_TAG
 
 
-def _assign_subsections(text_sources: TextSource) -> None:
-    """
-    Walk each group of passages in document order, tagging each with the most recently seen
-    subsection heading (e.g. "methods", "discussion") from PMC_RECOGNIZED_SUBSECTION_HEADINGS, if any.
-    Matches against the passage's tag-stripped text, since a heading might have keep_tags
-    markup embedded (e.g. an italicized word) that would otherwise prevent an exact match.
-    """
-    for passages in cast(Dict[str, List[dict]], text_sources).values():
-        subsection = None
-        for passage in passages:
-            plain_text = _TAG_RE.sub("", passage["text"])
-            subsection_check = plain_text.lower().strip("01234567890. ")
-            if subsection_check in PMC_RECOGNIZED_SUBSECTION_HEADINGS:
-                subsection = subsection_check
-            passage["subsection"] = subsection
-
-
 def _extract_article_content(
     article_elem: etree.Element,
     keep_tags,
@@ -150,7 +132,7 @@ def _extract_article_content(
     clean_xrefs_in_brackets,
     clear_empty_brackets,
     fix_exponentials,
-) -> TextSource:
+) -> Dict[str, Union[str, List[str]]]:
     """
     Given the XML element representing the top-level of the scientific article, extract all the text sources
     """
@@ -163,8 +145,8 @@ def _extract_article_content(
         "./front/article-meta/title-group/subtitle"
     ) + article_elem.findall("./front-stub/title-group/subtitle")
 
-    title_text = [
-        {"text": _remove_brackets_from_titles(t)}
+    title_text = " ".join(
+        _remove_brackets_from_titles(t)
         for t in _extract_pmc_passages(
             title,
             keep_tags,
@@ -176,9 +158,9 @@ def _extract_article_content(
             clear_empty_brackets,
             fix_exponentials,
         )
-    ]
-    subtitle_text = [
-        {"text": _remove_brackets_from_titles(t)}
+    )
+    subtitle_text = " ".join(
+        _remove_brackets_from_titles(t)
         for t in _extract_pmc_passages(
             subtitle,
             keep_tags,
@@ -190,19 +172,18 @@ def _extract_article_content(
             clear_empty_brackets,
             fix_exponentials,
         )
-    ]
+    )
 
     # Extract the abstract from the paper
     abstract = article_elem.findall("./front/article-meta/abstract") + article_elem.findall(
         "./front-stub/abstract"
     )
 
-    text_sources: TextSource = {
+    return {
         "title": title_text,
         "subtitle": subtitle_text,
-        "abstract": [
-            {"text": t}
-            for t in _extract_pmc_passages(
+        "abstract": list(
+            _extract_pmc_passages(
                 abstract,
                 keep_tags,
                 return_xml,
@@ -213,11 +194,10 @@ def _extract_article_content(
                 clear_empty_brackets,
                 fix_exponentials,
             )
-        ],
+        ),
         # Extract the full text from the paper as well as supplementaries and floating blocks of text
-        "article": [
-            {"text": t}
-            for t in _extract_pmc_passages(
+        "article": list(
+            _extract_pmc_passages(
                 article_elem.findall("./body"),
                 keep_tags,
                 return_xml,
@@ -228,10 +208,9 @@ def _extract_article_content(
                 clear_empty_brackets,
                 fix_exponentials,
             )
-        ],
-        "back": [
-            {"text": t}
-            for t in _extract_pmc_passages(
+        ),
+        "back": list(
+            _extract_pmc_passages(
                 article_elem.findall("./back"),
                 keep_tags,
                 return_xml,
@@ -242,10 +221,9 @@ def _extract_article_content(
                 clear_empty_brackets,
                 fix_exponentials,
             )
-        ],
-        "floating": [
-            {"text": t}
-            for t in _extract_pmc_passages(
+        ),
+        "floating": list(
+            _extract_pmc_passages(
                 article_elem.findall("./floats-group"),
                 keep_tags,
                 return_xml,
@@ -256,12 +234,8 @@ def _extract_article_content(
                 clear_empty_brackets,
                 fix_exponentials,
             )
-        ],
+        ),
     }
-
-    _assign_subsections(text_sources)
-
-    return text_sources
 
 
 def _field_text(elem, tag):
@@ -271,7 +245,7 @@ def _field_text(elem, tag):
     return field.text.strip().replace("\n", " ")
 
 
-def _get_meta_info_for_pmc_article(article_elem) -> PmcMeta:
+def _get_meta_info_for_pmc_article(article_elem) -> Dict[str, Optional[Union[str, int]]]:
     # Attempt to extract the PubMed ID, PubMed Central ID and DOI
     id_map = {}
     article_id = article_elem.findall("./front/article-meta/article-id") + article_elem.findall(
@@ -349,18 +323,16 @@ def _get_meta_info_for_pmc_article(article_elem) -> PmcMeta:
         if field.attrib.get("journal-id-type") == "iso-abbrev":
             journal_iso_text = field.text
 
-    return PmcMeta(
-        {
-            "pmid": pmid_text,
-            "pmcid": pmcid_text,
-            "doi": doi_text,
-            "pub_year": pub_year,
-            "pub_month": pub_month,
-            "pub_day": pub_day,
-            "journal": journal_text,
-            "journal_iso": journal_iso_text,
-        }
-    )
+    return {
+        "pmid": pmid_text,
+        "pmcid": pmcid_text,
+        "doi": doi_text,
+        "pub_year": pub_year,
+        "pub_month": pub_month,
+        "pub_day": pub_day,
+        "journal": journal_text,
+        "journal_iso": journal_iso_text,
+    }
 
 
 def _apply_pmc_xlink_fix(source: Union[str, TextIO]) -> TextIO:
@@ -399,7 +371,7 @@ def parse_pmcxml(
     fix_exponentials: bool = True,
 ) -> Iterable[PMCArticle]:
     """
-    Parse a PMC XML file into a series of PMCArticle dicts (one per article/sub-article).
+    Parse a PMC XML file into a series of PMCArticle objects (one per article/sub-article).
 
     Args:
         source: The text or file handle containing the PMC XML
@@ -469,7 +441,7 @@ def parse_pmcxml(
                         sub_meta["journal"] = meta["journal"]
                         sub_meta["journal_iso"] = meta["journal_iso"]
 
-                text_sources = _extract_article_content(
+                content = _extract_article_content(
                     article_elem,
                     keep_tags,
                     return_xml,
@@ -481,7 +453,7 @@ def parse_pmcxml(
                     fix_exponentials,
                 )
 
-                yield PMCArticle({**sub_meta, "text_sources": text_sources})
+                yield PMCArticle(**sub_meta, **content)
 
             # Less important here (compared to abstracts) as each article file is not too big
             elem.clear()
@@ -501,7 +473,7 @@ def pmcxml2bioc(
 
     Args:
         source: The text or file handle containing the PMC XML
-        sections: which of the six text_sources groups ("title", "subtitle", "abstract",
+        sections: which of the six PMCArticle text fields ("title", "subtitle", "abstract",
             "article", "back", "floating") to include as passages, and in what order.
         trim_buggy_sentences: trim overly long, unbroken runs of text to a maximum length,
             to avoid issues with buggy sentences in some PMC articles.
@@ -529,29 +501,28 @@ def pmcxml2bioc(
             fix_exponentials=fix_exponentials,
         ):
             bioc_doc = bioc.BioCDocument()
-            bioc_doc.id = pmc_doc["pmid"]
-            bioc_doc.infons["title"] = " ".join(
-                p["text"] for p in pmc_doc["text_sources"]["title"]
-            )
-            bioc_doc.infons["pmid"] = pmc_doc["pmid"]
-            bioc_doc.infons["pmcid"] = pmc_doc["pmcid"]
-            bioc_doc.infons["doi"] = pmc_doc["doi"]
-            bioc_doc.infons["year"] = pmc_doc["pub_year"]
-            bioc_doc.infons["month"] = pmc_doc["pub_month"]
-            bioc_doc.infons["day"] = pmc_doc["pub_day"]
-            bioc_doc.infons["journal"] = pmc_doc["journal"]
-            bioc_doc.infons["journal_iso"] = pmc_doc["journal_iso"]
+            bioc_doc.id = pmc_doc.pmid
+            bioc_doc.infons["title"] = pmc_doc.title
+            bioc_doc.infons["pmid"] = pmc_doc.pmid
+            bioc_doc.infons["pmcid"] = pmc_doc.pmcid
+            bioc_doc.infons["doi"] = pmc_doc.doi
+            bioc_doc.infons["year"] = pmc_doc.pub_year
+            bioc_doc.infons["month"] = pmc_doc.pub_month
+            bioc_doc.infons["day"] = pmc_doc.pub_day
+            bioc_doc.infons["journal"] = pmc_doc.journal
+            bioc_doc.infons["journal_iso"] = pmc_doc.journal_iso
 
             offset = 0
-            text_source_groups = cast(Dict[str, List[dict]], pmc_doc["text_sources"])
             for group_name in sections:
-                for passage_dict in text_source_groups[group_name]:
-                    text_source = passage_dict["text"]
+                value = getattr(pmc_doc, group_name)
+                texts = (value,) if isinstance(value, str) else value
+                for text_source in texts:
+                    if not text_source:
+                        continue
 
                     passage = bioc.BioCPassage()
 
                     passage.infons["section"] = group_name
-                    passage.infons["subsection"] = passage_dict["subsection"]
 
                     passage.text = text_source
                     passage.offset = offset
@@ -581,7 +552,7 @@ def pmcxml2txt(
 
     Args:
         source: The text or file handle containing the PMC XML
-        sections: which of the six text_sources groups ("title", "subtitle", "abstract",
+        sections: which of the six PMCArticle text fields ("title", "subtitle", "abstract",
             "article", "back", "floating") to include, and in what order.
         include_metadata: prepend a "label: value" header block (pmid, pmcid, doi, year,
             month, day, journal) before the text, separated by passage_separator like any
@@ -612,20 +583,18 @@ def pmcxml2txt(
         if include_metadata:
             header = _format_metadata_header(
                 {
-                    "pmid": doc["pmid"],
-                    "pmcid": doc["pmcid"],
-                    "doi": doc["doi"],
-                    "year": doc["pub_year"],
-                    "month": doc["pub_month"],
-                    "day": doc["pub_day"],
-                    "journal": doc["journal"],
+                    "pmid": doc.pmid,
+                    "pmcid": doc.pmcid,
+                    "doi": doc.doi,
+                    "year": doc.pub_year,
+                    "month": doc.pub_month,
+                    "day": doc.pub_day,
+                    "journal": doc.journal,
                 }
             )
             if header:
                 parts.append(header)
 
-        for section in sections:
-            for passage in doc["text_sources"][section]:
-                parts.append(passage["text"])
+        parts.extend(doc.iter_text(sections))
 
         yield passage_separator.join(parts)
