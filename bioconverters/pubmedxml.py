@@ -23,23 +23,63 @@ _MONTH_NAME_TO_NUMBER.update({m: i for i, m in enumerate(calendar.month_abbr)})
 
 @dataclass
 class PubMedArticle:
+    """One MEDLINE/PubMed article, as extracted by `parse_pubmedxml`."""
+
     pmid: str
+    """PubMed ID."""
+
     pmcid: Optional[str]
+    """PubMed Central ID, or None if not linked."""
+
     doi: Optional[str]
+    """DOI, or None if not found."""
+
     pub_year: Optional[int]
+    """Publication year, or None if not found."""
+
     pub_month: Optional[int]
+    """Publication month, or None if not found."""
+
     pub_day: Optional[int]
+    """Publication day, or None if not found."""
+
     title: str
+    """Article title."""
+
     abstract: Iterable[str]
+    """Abstract passages, one per `<AbstractText>` element."""
+
     journal: str
+    """Journal title, or an empty string if not found."""
+
     journal_iso: str
+    """ISO abbreviation of the journal title, or an empty string if not found."""
+
     authors: Iterable[str]
+    """Author names, in document order."""
+
     chemicals: str
+    """Tab-separated "id|name" chemical entries."""
+
     mesh_headings: str
+    """Tab-separated MeSH headings; each is "Descriptor|ui|major_topic_yn|name", followed
+    by "~Qualifier|ui|major_topic_yn|name" for each qualifier on that heading."""
+
     supplementary_mesh: str
+    """Tab-separated "id|type|name" supplementary concept entries."""
+
     publication_types: str
+    """Pipe-separated publication type names (excludes generic NLM support-type labels
+    like "Research Support, N.I.H., Extramural")."""
 
     def iter_text(self, sections: Iterable[str] = ("title", "abstract")) -> Iterator[str]:
+        """
+        Yield each non-empty passage of text from the given fields, in order.
+
+        Args:
+            sections: which fields to pull text from, and in what order. Defaults to
+                ("title", "abstract").
+        """
         for section in sections:
             value = getattr(self, section)
             texts = (value,) if isinstance(value, str) else value
