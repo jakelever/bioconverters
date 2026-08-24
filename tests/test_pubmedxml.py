@@ -451,6 +451,27 @@ def test_pubmedxml2txt_drops_abstract_passage_left_empty_by_bracket_cleanup():
     assert texts == ['Real content.']
 
 
+def test_pubmedxml2bioc_drops_abstract_passage_left_empty_by_bracket_cleanup():
+    # same as test_pubmedxml2txt_drops_abstract_passage_left_empty_by_bracket_cleanup,
+    # but exercising pubmedxml2bioc's own empty-passage filter
+    xml = '''<PubmedArticle>
+        <MedlineCitation>
+            <PMID>99</PMID>
+            <Article>
+                <Journal><JournalIssue><PubDate><Year>2020</Year></PubDate></JournalIssue></Journal>
+                <ArticleTitle>A Test Title</ArticleTitle>
+                <Abstract>
+                    <AbstractText>Real content.</AbstractText>
+                    <AbstractText>( )</AbstractText>
+                </Abstract>
+            </Article>
+        </MedlineCitation>
+        <PubmedData><ArticleIdList></ArticleIdList></PubmedData>
+    </PubmedArticle>'''
+    docs = list(pubmedxml2bioc(StringIO(xml), sections=('abstract',)))
+    assert [p.text for p in docs[0].passages] == ['Real content.']
+
+
 def test_pubmedxml2txt_clear_empty_brackets_false_keeps_bracket_only_content():
     xml = '''<PubmedArticle>
         <MedlineCitation>
