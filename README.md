@@ -83,7 +83,7 @@ for article in parse_pmcxml('/path/to/pmc.xml'):
 
 Notable flags:
 - `return_xml` (default `False`) - return each passage's text as a marked-up XML string instead of plain text. Pair with `keep_tags` to control which tags survive, e.g. `"some <sup>1</sup>H text"`.
-- `keep_tags` - which tags' markup is preserved inline when `return_xml=True`. Defaults to `pmc_constants.PMC_KEEP_TAGS` (`<sup>`, `<sub>`, `<italic>`, etc).
+- `keep_tags` - which tags' markup is preserved inline when `return_xml=True`. Use `pmc_constants.PMC_KEEP_TAGS` for useful formatting tags (`<sup>`, `<sub>`, `<italic>`, etc).
 - `inject_citations` (default `False`) - resolve each in-text citation's `pmid`/`doi` and retag it to `<citation pmid="...">1</citation>`, kept in the output instead of dropped. Can't be combined with `clean_numeric_citations`.
 - `clean_numeric_citations`, `clean_xrefs_in_brackets`, `clear_empty_brackets` (all default `True`) - see "Cleaning up text" below.
 
