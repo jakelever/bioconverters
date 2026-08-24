@@ -39,8 +39,8 @@ def _cleanup_pmc_text(text: str) -> str:
     """
     orig_text = str(text)
 
-    # Remove some "control-like" characters (left/right separator)
-    text = text.replace(" ", " ").replace(" ", " ")
+    # Blank out control characters (category C) and separator characters (category Z,
+    # e.g. line/paragraph separators), which covers "left/right separator" cases too
     text = "".join(ch if unicodedata.category(ch)[0] != "C" else " " for ch in text)
     text = "".join(ch if unicodedata.category(ch)[0] != "Z" else " " for ch in text)
 
