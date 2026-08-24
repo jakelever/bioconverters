@@ -41,15 +41,7 @@ This returns a `PubMedArticle` data structure with the various metadata and text
 from bioconverters import parse_pubmedxml
 
 for article in parse_pubmedxml('/path/to/medline.xml'):
-    # a PubMedArticle dataclass: pmid, pmcid, doi, pub_year/month/day, title (str),
-    # abstract (list of str), journal, journal_iso, authors (list of str),
-    # chemicals (list of Chemical), mesh_headings (list of MeshHeading, each with its
-    # qualifiers nested inside as MeshQualifier), supplementary_mesh (list of
-    # SupplementaryMeshConcept), publication_types (list of PublicationType).
-    # article.iter_text(sections=...) yields the text of "title"/"abstract", in order,
-    # skipping any that are empty.
-    for heading in article.mesh_headings:
-        print(heading.name, [q.name for q in heading.qualifiers])
+    # a PubMedArticle dataclass: pmid, pmcid, doi, pub_year/month/day, title abstract, etc
     ...
 ```
 
@@ -85,10 +77,7 @@ This returns a `PMCArticle` data structure with the various metadata and text fi
 from bioconverters import parse_pmcxml
 
 for article in parse_pmcxml('/path/to/pmc.xml'):
-    # a PMCArticle dataclass: pmid, pmcid, doi, pub_year/month/day, journal, journal_iso,
-    # title (str), subtitle (str), and abstract/article/back/floating (each a list of str
-    # passages). article.iter_text(sections=...) yields the text of the given fields, in
-    # order, skipping any that are empty.
+    # a PMCArticle dataclass: pmid, pmcid, doi, pub_year/month/day, journal, journal_iso, title, abstract, body, etc
     ...
 ```
 
