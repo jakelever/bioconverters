@@ -36,15 +36,16 @@ for doc in pubmedxml2bioc('/path/to/medline.xml'):
 
 Flags: `sections` (default `("title", "abstract")`).
 
-### `parse_pubmedxml` - raw dicts, for everything else
+### `parse_pubmedxml` - raw PubMedArticle objects, for everything else
 
 ```python
 from bioconverters import parse_pubmedxml
 
 for article in parse_pubmedxml('/path/to/medline.xml'):
-    # a PubMedArticle dict: pmid, pmcid, doi, pub_year/month/day, title, abstract,
-    # journal, journal_iso, authors, chemicals, mesh_headings, supplementary_mesh,
-    # publication_types
+    # a PubMedArticle dataclass: pmid, pmcid, doi, pub_year/month/day, title (str),
+    # abstract (list of str), journal, journal_iso, authors, chemicals, mesh_headings,
+    # supplementary_mesh, publication_types. article.iter_text(sections=...) yields the
+    # text of "title"/"abstract", in order, skipping any that are empty.
     ...
 ```
 

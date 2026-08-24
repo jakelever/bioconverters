@@ -2,7 +2,8 @@ import calendar
 import html
 import re
 import xml.etree.ElementTree as etree
-from typing import Iterable, Iterator, Optional, TextIO, Tuple, TypedDict, Union
+from dataclasses import dataclass
+from typing import Iterable, Iterator, Optional, TextIO, Tuple, Union
 
 import bioc
 
@@ -20,14 +21,15 @@ _MONTH_NAME_TO_NUMBER = {m: i for i, m in enumerate(calendar.month_name)}
 _MONTH_NAME_TO_NUMBER.update({m: i for i, m in enumerate(calendar.month_abbr)})
 
 
-class PubMedArticle(TypedDict):
+@dataclass
+class PubMedArticle:
     pmid: str
     pmcid: Optional[str]
     doi: Optional[str]
     pub_year: Optional[int]
     pub_month: Optional[int]
     pub_day: Optional[int]
-    title: Iterable[str]
+    title: str
     abstract: Iterable[str]
     journal: str
     journal_iso: str
@@ -36,6 +38,14 @@ class PubMedArticle(TypedDict):
     mesh_headings: str
     supplementary_mesh: str
     publication_types: str
+
+    def iter_text(self, sections: Iterable[str] = ("title", "abstract")) -> Iterator[str]:
+        for section in sections:
+            value = getattr(self, section)
+            texts = (value,) if isinstance(value, str) else value
+            for text in texts:
+                if text:
+                    yield text
 
 
 def _get_journal_date_for_medline_file(elem: etree.Element, pmid: Union[str, int]) -> _DateTuple:
@@ -274,8 +284,9 @@ def parse_pubmedxml(
             pub_type = [e.text for e in pub_type_elems if e.text not in _pub_type_skips]
             pub_type_txt = "|".join(pub_type)
 
-            # Extract the title of paper
+            # Extract the title of paper - the DTD requires exactly one ArticleTitle per Article
             title = elem.findall("./MedlineCitation/Article/ArticleTitle")
+            assert len(title) == 1, "Expected exactly one ArticleTitle for PMID=%s" % pmid
             title_passages = _extract_passages(
                 title,
                 PUBMED_IGNORE_TAGS,
@@ -285,10 +296,10 @@ def parse_pubmedxml(
                 trim_buggy_sentences=True,
                 fix_exponentials=fix_exponentials,
             )
-            title_text = [_remove_brackets_from_titles(t) for t in title_passages]
-            title_text = [html.unescape(t) for t in title_text]
+            title_text = _remove_brackets_from_titles(title_passages[0])
+            title_text = html.unescape(title_text)
             if clear_empty_brackets:
-                title_text = [_remove_brackets_without_words(t) for t in title_text]
+                title_text = _remove_brackets_without_words(title_text)
 
             # Extract the abstract from the paper
             abstract = elem.findall("./MedlineCitation/Article/Abstract/AbstractText")
@@ -319,23 +330,21 @@ def parse_pubmedxml(
                 journal_iso_title = journal_title_iso_fields[0].text
 
             yield PubMedArticle(
-                {
-                    "pmid": pmid,
-                    "pmcid": pmcid,
-                    "doi": doi,
-                    "pub_year": pub_year,
-                    "pub_month": pub_month,
-                    "pub_day": pub_day,
-                    "title": title_text,
-                    "abstract": abstract_text,
-                    "journal": journal_title,
-                    "journal_iso": journal_iso_title,
-                    "authors": authors,
-                    "chemicals": chemicals_txt,
-                    "mesh_headings": mesh_headings_txt,
-                    "supplementary_mesh": supplementary_concepts_txt,
-                    "publication_types": pub_type_txt,
-                }
+                pmid=pmid,
+                pmcid=pmcid,
+                doi=doi,
+                pub_year=pub_year,
+                pub_month=pub_month,
+                pub_day=pub_day,
+                title=title_text,
+                abstract=abstract_text,
+                journal=journal_title,
+                journal_iso=journal_iso_title,
+                authors=authors,
+                chemicals=chemicals_txt,
+                mesh_headings=mesh_headings_txt,
+                supplementary_mesh=supplementary_concepts_txt,
+                publication_types=pub_type_txt,
             )
 
             # Important: clear the current element from memory to keep memory usage low
@@ -359,25 +368,29 @@ def pubmedxml2bioc(
         source, clear_empty_brackets=clear_empty_brackets, fix_exponentials=fix_exponentials
     ):
         bioc_doc = bioc.BioCDocument()
-        bioc_doc.id = pm_doc["pmid"]
-        bioc_doc.infons["title"] = " ".join(pm_doc["title"])
-        bioc_doc.infons["pmid"] = pm_doc["pmid"]
-        bioc_doc.infons["pmcid"] = pm_doc["pmcid"]
-        bioc_doc.infons["doi"] = pm_doc["doi"]
-        bioc_doc.infons["year"] = pm_doc["pub_year"]
-        bioc_doc.infons["month"] = pm_doc["pub_month"]
-        bioc_doc.infons["day"] = pm_doc["pub_day"]
-        bioc_doc.infons["journal"] = pm_doc["journal"]
-        bioc_doc.infons["journal_iso"] = pm_doc["journal_iso"]
-        bioc_doc.infons["authors"] = ", ".join(pm_doc["authors"])
-        bioc_doc.infons["chemicals"] = pm_doc["chemicals"]
-        bioc_doc.infons["mesh_headings"] = pm_doc["mesh_headings"]
-        bioc_doc.infons["supplementary_mesh"] = pm_doc["supplementary_mesh"]
-        bioc_doc.infons["publication_types"] = pm_doc["publication_types"]
+        bioc_doc.id = pm_doc.pmid
+        bioc_doc.infons["title"] = pm_doc.title
+        bioc_doc.infons["pmid"] = pm_doc.pmid
+        bioc_doc.infons["pmcid"] = pm_doc.pmcid
+        bioc_doc.infons["doi"] = pm_doc.doi
+        bioc_doc.infons["year"] = pm_doc.pub_year
+        bioc_doc.infons["month"] = pm_doc.pub_month
+        bioc_doc.infons["day"] = pm_doc.pub_day
+        bioc_doc.infons["journal"] = pm_doc.journal
+        bioc_doc.infons["journal_iso"] = pm_doc.journal_iso
+        bioc_doc.infons["authors"] = ", ".join(pm_doc.authors)
+        bioc_doc.infons["chemicals"] = pm_doc.chemicals
+        bioc_doc.infons["mesh_headings"] = pm_doc.mesh_headings
+        bioc_doc.infons["supplementary_mesh"] = pm_doc.supplementary_mesh
+        bioc_doc.infons["publication_types"] = pm_doc.publication_types
 
         offset = 0
         for section in sections:
-            for text_source in pm_doc[section]:
+            value = getattr(pm_doc, section)
+            texts = (value,) if isinstance(value, str) else value
+            for text_source in texts:
+                if not text_source:
+                    continue
                 passage = bioc.BioCPassage()
                 passage.infons["section"] = section
                 passage.text = text_source
@@ -420,22 +433,19 @@ def pubmedxml2txt(
         if include_metadata:
             header = _format_metadata_header(
                 {
-                    "pmid": pm_doc["pmid"],
-                    "pmcid": pm_doc["pmcid"],
-                    "doi": pm_doc["doi"],
-                    "year": pm_doc["pub_year"],
-                    "month": pm_doc["pub_month"],
-                    "day": pm_doc["pub_day"],
-                    "journal": pm_doc["journal"],
-                    "authors": "; ".join(pm_doc["authors"]) if pm_doc["authors"] else None,
+                    "pmid": pm_doc.pmid,
+                    "pmcid": pm_doc.pmcid,
+                    "doi": pm_doc.doi,
+                    "year": pm_doc.pub_year,
+                    "month": pm_doc.pub_month,
+                    "day": pm_doc.pub_day,
+                    "journal": pm_doc.journal,
+                    "authors": "; ".join(pm_doc.authors) if pm_doc.authors else None,
                 }
             )
             if header:
                 parts.append(header)
 
-        for section in sections:
-            for text_source in pm_doc[section]:
-                if text_source:
-                    parts.append(text_source)
+        parts.extend(pm_doc.iter_text(sections))
 
         yield passage_separator.join(parts)
