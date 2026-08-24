@@ -410,7 +410,7 @@ def parse_pmcxml(
         trim_buggy_sentences: trim overly long, unbroken runs of text to a maximum length,
             to avoid issues with buggy sentences in some PMC articles.
         inject_citations: resolve each in-text bibr citation's pmid/doi and retag it to
-            <citation>, kept in the output instead of dropped (see _inject_citations). Must
+            `<citation>`, kept in the output instead of dropped (see _inject_citations). Must
             not be combined with clean_numeric_citations=True - injection enriches bibr citations,
             clean_numeric_citations deletes them, so having both on is almost certainly a mistake.
         clean_numeric_citations: drop a numeric bibr citation marker outright, e.g. "1", "[1,2]",
@@ -422,8 +422,8 @@ def parse_pmcxml(
             characters, e.g. from clean_numeric_citations/clean_xrefs_in_brackets, or from an
             unrelated ignore_tag (like ext-link) that happened to be parenthesised (see
             _remove_brackets_without_words).
-        fix_exponentials: with return_xml=False, recover a digit-preceded numeric "<sup>"
-            as "^N" instead of losing it to plain concatenation, e.g. "10<sup>8</sup>" ->
+        fix_exponentials: with return_xml=False, recover a digit-preceded numeric `<sup>`
+            as "^N" instead of losing it to plain concatenation, e.g. `"10<sup>8</sup>"` ->
             "10^8" (see _fix_exponentials).
 
     These defaults match pmcxml2bioc/pmcxml2txt, so behavior is consistent regardless of

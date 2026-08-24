@@ -27,6 +27,7 @@ dependencies = ["bioc>=2.0", "spans_and_trees>=0.3.0"]
 [project.optional-dependencies]
 test = ["pytest", "pytest-cov", "requests"]
 lint = ["ruff"]
+docs = ["pdoc"]
 
 [project.urls]
 Homepage = "https://github.com/jakelever/bioconverters"

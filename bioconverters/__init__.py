@@ -1,3 +1,5 @@
+__docformat__ = "google"
+
 from .pmcxml import PMCArticle, parse_pmcxml, pmcxml2bioc, pmcxml2txt
 from .pubmedxml import PubMedArticle, parse_pubmedxml, pubmedxml2bioc, pubmedxml2txt
 
