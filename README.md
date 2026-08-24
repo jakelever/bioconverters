@@ -22,8 +22,6 @@ for text in pubmedxml2txt('/path/to/medline.xml', include_metadata=True):
     ...
 ```
 
-Flags: `sections` (default `("title", "abstract")`), `include_metadata` (prepend a pmid/doi/year/journal/authors header), `passage_separator` (default `"\n\n"`).
-
 ### `pubmedxml2bioc` [![api](https://img.shields.io/badge/api-docs-blue)](https://jakelever.github.io/bioconverters/bioconverters.html#pubmedxml2bioc) - BioC documents
 
 ```python
@@ -33,8 +31,6 @@ for doc in pubmedxml2bioc('/path/to/medline.xml'):
     # doc is a bioc.BioCDocument, with title/abstract as separate passages
     ...
 ```
-
-Flags: `sections` (default `("title", "abstract")`).
 
 ### `parse_pubmedxml` [![api](https://img.shields.io/badge/api-docs-blue)](https://jakelever.github.io/bioconverters/bioconverters.html#parse_pubmedxml) - raw `PubMedArticle` objects, for everything else
 
@@ -68,8 +64,6 @@ for text in pmcxml2txt('/path/to/pmc.xml', include_metadata=True):
     ...
 ```
 
-Flags: `sections` (default: all six of `title`, `subtitle`, `abstract`, `article`, `back`, `floating`), `include_metadata`, `passage_separator`, `trim_buggy_sentences`, `clean_numeric_citations`, `clean_xrefs_in_brackets`, `clear_empty_brackets`, `fix_exponentials` (cleanup flags described below).
-
 ### `pmcxml2bioc` [![api](https://img.shields.io/badge/api-docs-blue)](https://jakelever.github.io/bioconverters/bioconverters.html#pmcxml2bioc) - BioC documents
 
 ```python
@@ -79,8 +73,6 @@ for doc in pmcxml2bioc('/path/to/pmc.xml'):
     # doc is a bioc.BioCDocument, with one passage per paragraph/section
     ...
 ```
-
-Flags: `sections` (default: all six of `title`, `subtitle`, `abstract`, `article`, `back`, `floating`), `trim_buggy_sentences`, `clean_numeric_citations`, `clean_xrefs_in_brackets`, `clear_empty_brackets`, `fix_exponentials` (cleanup flags described below).
 
 ### `parse_pmcxml` [![api](https://img.shields.io/badge/api-docs-blue)](https://jakelever.github.io/bioconverters/bioconverters.html#parse_pmcxml) - raw `PMCArticle` objects, with optional inline markup and citation control
 
@@ -95,15 +87,20 @@ for article in parse_pmcxml('/path/to/pmc.xml'):
     ...
 ```
 
-`parse_pmcxml` shares its defaults with `pmcxml2txt`/`pmcxml2bioc`, so behavior is consistent regardless of entry point. Notable flags:
+Notable flags:
 - `return_xml` (default `False`) - return each passage's text as a marked-up XML string instead of plain text. Pair with `keep_tags` to control which tags survive, e.g. `"some <sup>1</sup>H text"`.
 - `keep_tags` - which tags' markup is preserved inline when `return_xml=True`. Defaults to `pmc_constants.PMC_KEEP_TAGS` (`<sup>`, `<sub>`, `<italic>`, etc).
 - `inject_citations` (default `False`) - resolve each in-text citation's `pmid`/`doi` and retag it to `<citation pmid="...">1</citation>`, kept in the output instead of dropped. Can't be combined with `clean_numeric_citations`.
 - `clean_numeric_citations`, `clean_xrefs_in_brackets`, `clear_empty_brackets` (all default `True`) - see "Cleaning up text" below.
 
-## Notes on text extraction
+## Details on text extraction
 
-Text is extracted using [spans_and_trees](https://github.com/jakelever/spans_and_trees). Table content is omitted from extracted text. Overly long, unbroken runs of text are automatically trimmed to a maximum length (controlled by the `trim_buggy_sentences` flag).
+- Text is extracted using [spans_and_trees](https://github.com/jakelever/spans_and_trees).
+- Table content is omitted from extracted text.
+- Overly long, unbroken runs of text are automatically trimmed to a maximum length (controlled by the `trim_buggy_sentences` flag).
+- Unicode control characters are removed
+- Various dash-like characters are converted to hyphens
+- By default, various text artefacts are cleaned up with details outlined below
 
 ## Cleaning up text
 
