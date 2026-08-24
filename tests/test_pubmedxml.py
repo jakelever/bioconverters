@@ -2,7 +2,16 @@ from io import StringIO
 
 import pytest
 
-from bioconverters import parse_pubmedxml, pubmedxml2bioc, pubmedxml2txt
+from bioconverters import (
+    Chemical,
+    MeshHeading,
+    MeshQualifier,
+    PublicationType,
+    SupplementaryMeshConcept,
+    parse_pubmedxml,
+    pubmedxml2bioc,
+    pubmedxml2txt,
+)
 
 from .util import fetch_xml
 
@@ -287,6 +296,106 @@ def test_supplementary_mesh_concepts_extracted():
     )
     docs = list(pubmedxml2bioc(StringIO(xml)))
     assert docs[0].infons['supplementary_mesh'] == 'C1|Disease|Test Concept'
+
+
+def test_supplementary_mesh_concepts_are_structured_objects():
+    xml = _pubmed_article_xml(
+        '<SupplMeshList><SupplMeshName UI="C1" Type="Disease">Test Concept</SupplMeshName></SupplMeshList>'
+    )
+    doc = list(parse_pubmedxml(StringIO(xml)))[0]
+    assert doc.supplementary_mesh == [SupplementaryMeshConcept(ui='C1', type='Disease', name='Test Concept')]
+
+
+def test_chemicals_are_structured_objects_with_registry_number():
+    xml = _pubmed_article_xml(
+        '''<ChemicalList>
+            <Chemical>
+                <RegistryNumber>0</RegistryNumber>
+                <NameOfSubstance UI="D000068877">Some Protein</NameOfSubstance>
+            </Chemical>
+        </ChemicalList>'''
+    )
+    doc = list(parse_pubmedxml(StringIO(xml)))[0]
+    assert doc.chemicals == [Chemical(ui='D000068877', name='Some Protein', registry_number='0')]
+
+
+def test_pubmedxml2bioc_chemicals_infons_includes_registry_number():
+    xml = _pubmed_article_xml(
+        '''<ChemicalList>
+            <Chemical>
+                <RegistryNumber>0</RegistryNumber>
+                <NameOfSubstance UI="D000068877">Some Protein</NameOfSubstance>
+            </Chemical>
+        </ChemicalList>'''
+    )
+    docs = list(pubmedxml2bioc(StringIO(xml)))
+    assert docs[0].infons['chemicals'] == 'D000068877|0|Some Protein'
+
+
+_MESH_HEADING_XML = _pubmed_article_xml(
+    '''<MeshHeadingList>
+        <MeshHeading>
+            <DescriptorName UI="D009369" MajorTopicYN="Y">Neoplasms</DescriptorName>
+            <QualifierName UI="Q000378" MajorTopicYN="N">genetics</QualifierName>
+            <QualifierName UI="Q000276" MajorTopicYN="Y">metabolism</QualifierName>
+        </MeshHeading>
+        <MeshHeading>
+            <DescriptorName UI="D006801" MajorTopicYN="N">Humans</DescriptorName>
+        </MeshHeading>
+    </MeshHeadingList>'''
+)
+
+
+def test_mesh_qualifiers_are_nested_under_their_descriptor():
+    doc = list(parse_pubmedxml(StringIO(_MESH_HEADING_XML)))[0]
+    assert doc.mesh_headings == [
+        MeshHeading(
+            ui='D009369',
+            name='Neoplasms',
+            major_topic=True,
+            qualifiers=[
+                MeshQualifier(ui='Q000378', name='genetics', major_topic=False),
+                MeshQualifier(ui='Q000276', name='metabolism', major_topic=True),
+            ],
+        ),
+        MeshHeading(ui='D006801', name='Humans', major_topic=False, qualifiers=[]),
+    ]
+
+
+def test_pubmedxml2bioc_mesh_headings_infons_nests_qualifiers_under_descriptor():
+    docs = list(pubmedxml2bioc(StringIO(_MESH_HEADING_XML)))
+    assert docs[0].infons['mesh_headings'] == (
+        'Descriptor|D009369|Y|Neoplasms~Qualifier|Q000378|N|genetics~Qualifier|Q000276|Y|metabolism'
+        '\tDescriptor|D006801|N|Humans'
+    )
+
+
+_PUBLICATION_TYPE_XML = '''<PubmedArticle>
+    <MedlineCitation>
+        <PMID>99</PMID>
+        <Article>
+            <Journal><JournalIssue><PubDate><Year>2020</Year></PubDate></JournalIssue></Journal>
+            <ArticleTitle>A Test Title</ArticleTitle>
+            <PublicationTypeList>
+                <PublicationType UI="D016428">Journal Article</PublicationType>
+                <PublicationType UI="D013485">Research Support, N.I.H., Extramural</PublicationType>
+            </PublicationTypeList>
+        </Article>
+    </MedlineCitation>
+    <PubmedData><ArticleIdList></ArticleIdList></PubmedData>
+</PubmedArticle>'''
+
+
+def test_publication_types_are_structured_and_skip_list_still_applies():
+    # generic NLM support-type labels (e.g. "Research Support, N.I.H., Extramural") are
+    # still excluded, same as before this was restructured into objects
+    doc = list(parse_pubmedxml(StringIO(_PUBLICATION_TYPE_XML)))[0]
+    assert doc.publication_types == [PublicationType(ui='D016428', name='Journal Article')]
+
+
+def test_pubmedxml2bioc_publication_types_infons_includes_ui():
+    docs = list(pubmedxml2bioc(StringIO(_PUBLICATION_TYPE_XML)))
+    assert docs[0].infons['publication_types'] == 'D016428|Journal Article'
 
 
 def test_journal_title_missing_defaults_to_empty_string():

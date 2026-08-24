@@ -43,9 +43,14 @@ from bioconverters import parse_pubmedxml
 
 for article in parse_pubmedxml('/path/to/medline.xml'):
     # a PubMedArticle dataclass: pmid, pmcid, doi, pub_year/month/day, title (str),
-    # abstract (list of str), journal, journal_iso, authors, chemicals, mesh_headings,
-    # supplementary_mesh, publication_types. article.iter_text(sections=...) yields the
-    # text of "title"/"abstract", in order, skipping any that are empty.
+    # abstract (list of str), journal, journal_iso, authors (list of str),
+    # chemicals (list of Chemical), mesh_headings (list of MeshHeading, each with its
+    # qualifiers nested inside as MeshQualifier), supplementary_mesh (list of
+    # SupplementaryMeshConcept), publication_types (list of PublicationType).
+    # article.iter_text(sections=...) yields the text of "title"/"abstract", in order,
+    # skipping any that are empty.
+    for heading in article.mesh_headings:
+        print(heading.name, [q.name for q in heading.qualifiers])
     ...
 ```
 

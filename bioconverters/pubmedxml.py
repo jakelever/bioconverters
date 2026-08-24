@@ -2,12 +2,19 @@ import calendar
 import html
 import re
 import xml.etree.ElementTree as etree
-from dataclasses import dataclass
 from typing import Iterable, Iterator, Optional, TextIO, Tuple, Union
 
 import bioc
 
 from .pubmed_constants import PUBMED_IGNORE_TAGS, PUBMED_KEEP_TAGS, PUBMED_SPLIT_TAGS
+from .pubmed_types import (
+    Chemical,
+    MeshHeading,
+    MeshQualifier,
+    PublicationType,
+    PubMedArticle,
+    SupplementaryMeshConcept,
+)
 from .utils import (
     _extract_passages,
     _format_metadata_header,
@@ -19,73 +26,6 @@ _DateTuple = Tuple[Optional[int], Optional[int], Optional[int]]
 
 _MONTH_NAME_TO_NUMBER = {m: i for i, m in enumerate(calendar.month_name)}
 _MONTH_NAME_TO_NUMBER.update({m: i for i, m in enumerate(calendar.month_abbr)})
-
-
-@dataclass
-class PubMedArticle:
-    """One MEDLINE/PubMed article, as extracted by `parse_pubmedxml`."""
-
-    pmid: str
-    """PubMed ID."""
-
-    pmcid: Optional[str]
-    """PubMed Central ID, or None if not linked."""
-
-    doi: Optional[str]
-    """DOI, or None if not found."""
-
-    pub_year: Optional[int]
-    """Publication year, or None if not found."""
-
-    pub_month: Optional[int]
-    """Publication month, or None if not found."""
-
-    pub_day: Optional[int]
-    """Publication day, or None if not found."""
-
-    title: str
-    """Article title."""
-
-    abstract: Iterable[str]
-    """Abstract passages, one per `<AbstractText>` element."""
-
-    journal: str
-    """Journal title, or an empty string if not found."""
-
-    journal_iso: str
-    """ISO abbreviation of the journal title, or an empty string if not found."""
-
-    authors: Iterable[str]
-    """Author names, in document order."""
-
-    chemicals: str
-    """Tab-separated "id|name" chemical entries."""
-
-    mesh_headings: str
-    """Tab-separated MeSH headings; each is "Descriptor|ui|major_topic_yn|name", followed
-    by "~Qualifier|ui|major_topic_yn|name" for each qualifier on that heading."""
-
-    supplementary_mesh: str
-    """Tab-separated "id|type|name" supplementary concept entries."""
-
-    publication_types: str
-    """Pipe-separated publication type names (excludes generic NLM support-type labels
-    like "Research Support, N.I.H., Extramural")."""
-
-    def iter_text(self, sections: Iterable[str] = ("title", "abstract")) -> Iterator[str]:
-        """
-        Yield each non-empty passage of text from the given fields, in order.
-
-        Args:
-            sections: which fields to pull text from, and in what order. Defaults to
-                ("title", "abstract").
-        """
-        for section in sections:
-            value = getattr(self, section)
-            texts = (value,) if isinstance(value, str) else value
-            for text in texts:
-                if text:
-                    yield text
 
 
 def _get_journal_date_for_medline_file(elem: etree.Element, pmid: Union[str, int]) -> _DateTuple:
@@ -191,12 +131,6 @@ _pub_type_skips = {
 _doi_regex = re.compile(r"^[0-9\.]+\/.+[^\/]$")
 
 
-def _format_mesh_field(prefix: str, mesh_id: str, major_topic_yn: str, name: str) -> str:
-    for value in (mesh_id, major_topic_yn, name):
-        assert "|" not in value and "~" not in value, "Found delimiter in %s" % value
-    return "%s|%s|%s|%s" % (prefix, mesh_id, major_topic_yn, name)
-
-
 def parse_pubmedxml(
     source: Union[str, TextIO],
     clear_empty_brackets: bool = True,
@@ -261,44 +195,46 @@ def parse_pubmedxml(
                 authors.append(name)
 
             chemicals = []
-            chemical_elems = elem.findall("./MedlineCitation/ChemicalList/Chemical/NameOfSubstance")
+            chemical_elems = elem.findall("./MedlineCitation/ChemicalList/Chemical")
             for chemical_elem in chemical_elems:
-                chem_id = chemical_elem.attrib["UI"]
-                name = chemical_elem.text
-                chemicals.append("%s|%s" % (chem_id, name))
-            chemicals_txt = "\t".join(chemicals)
+                substance_elem = chemical_elem.find("./NameOfSubstance")
+                chemicals.append(
+                    Chemical(
+                        ui=substance_elem.attrib["UI"],
+                        name=substance_elem.text,
+                        registry_number=chemical_elem.find("./RegistryNumber").text,
+                    )
+                )
 
             mesh_headings = []
             mesh_elems = elem.findall("./MedlineCitation/MeshHeadingList/MeshHeading")
             for mesh_elem in mesh_elems:
                 descriptor_elem = mesh_elem.find("./DescriptorName")
-                mesh_heading = _format_mesh_field(
-                    "Descriptor",
-                    descriptor_elem.attrib["UI"],
-                    descriptor_elem.attrib["MajorTopicYN"],
-                    descriptor_elem.text,
+                qualifiers = [
+                    MeshQualifier(
+                        ui=qualifier_elem.attrib["UI"],
+                        name=qualifier_elem.text,
+                        major_topic=qualifier_elem.attrib["MajorTopicYN"] == "Y",
+                    )
+                    for qualifier_elem in mesh_elem.findall("./QualifierName")
+                ]
+                mesh_headings.append(
+                    MeshHeading(
+                        ui=descriptor_elem.attrib["UI"],
+                        name=descriptor_elem.text,
+                        major_topic=descriptor_elem.attrib["MajorTopicYN"] == "Y",
+                        qualifiers=qualifiers,
+                    )
                 )
 
-                qualifier_elems = mesh_elem.findall("./QualifierName")
-                for qualifier_elem in qualifier_elems:
-                    mesh_heading += "~" + _format_mesh_field(
-                        "Qualifier",
-                        qualifier_elem.attrib["UI"],
-                        qualifier_elem.attrib["MajorTopicYN"],
-                        qualifier_elem.text,
-                    )
-
-                mesh_headings.append(mesh_heading)
-            mesh_headings_txt = "\t".join(mesh_headings)
-
-            supplementary_concepts = []
-            concept_elems = elem.findall("./MedlineCitation/SupplMeshList/SupplMeshName")
-            for concept_elem in concept_elems:
-                concept_id = concept_elem.attrib["UI"]
-                concept_type = concept_elem.attrib["Type"]
-                concept_name = concept_elem.text
-                supplementary_concepts.append("%s|%s|%s" % (concept_id, concept_type, concept_name))
-            supplementary_concepts_txt = "\t".join(supplementary_concepts)
+            supplementary_concepts = [
+                SupplementaryMeshConcept(
+                    ui=concept_elem.attrib["UI"],
+                    type=concept_elem.attrib["Type"],
+                    name=concept_elem.text,
+                )
+                for concept_elem in elem.findall("./MedlineCitation/SupplMeshList/SupplMeshName")
+            ]
 
             doi_elems = elem.findall("./PubmedData/ArticleIdList/ArticleId[@IdType='doi']")
             dois = [
@@ -320,8 +256,11 @@ def parse_pubmedxml(
             pub_type_elems = elem.findall(
                 "./MedlineCitation/Article/PublicationTypeList/PublicationType"
             )
-            pub_type = [e.text for e in pub_type_elems if e.text not in _pub_type_skips]
-            pub_type_txt = "|".join(pub_type)
+            publication_types = [
+                PublicationType(ui=e.attrib["UI"], name=e.text)
+                for e in pub_type_elems
+                if e.text not in _pub_type_skips
+            ]
 
             # Extract the title of paper - the DTD requires exactly one ArticleTitle per Article
             title = elem.findall("./MedlineCitation/Article/ArticleTitle")
@@ -380,14 +319,34 @@ def parse_pubmedxml(
                 journal=journal_title,
                 journal_iso=journal_iso_title,
                 authors=authors,
-                chemicals=chemicals_txt,
-                mesh_headings=mesh_headings_txt,
-                supplementary_mesh=supplementary_concepts_txt,
-                publication_types=pub_type_txt,
+                chemicals=chemicals,
+                mesh_headings=mesh_headings,
+                supplementary_mesh=supplementary_concepts,
+                publication_types=publication_types,
             )
 
             # Important: clear the current element from memory to keep memory usage low
             elem.clear()
+
+
+def _format_chemical_for_infons(chemical: Chemical) -> str:
+    return "%s|%s|%s" % (chemical.ui, chemical.registry_number, chemical.name)
+
+
+def _format_mesh_heading_for_infons(heading: MeshHeading) -> str:
+    parts = ["Descriptor|%s|%s|%s" % (heading.ui, "Y" if heading.major_topic else "N", heading.name)]
+    parts += [
+        "Qualifier|%s|%s|%s" % (q.ui, "Y" if q.major_topic else "N", q.name) for q in heading.qualifiers
+    ]
+    return "~".join(parts)
+
+
+def _format_supplementary_mesh_for_infons(concept: SupplementaryMeshConcept) -> str:
+    return "%s|%s|%s" % (concept.ui, concept.type, concept.name)
+
+
+def _format_publication_type_for_infons(pub_type: PublicationType) -> str:
+    return "%s|%s" % (pub_type.ui, pub_type.name)
 
 
 def pubmedxml2bioc(
@@ -418,10 +377,16 @@ def pubmedxml2bioc(
         bioc_doc.infons["journal"] = pm_doc.journal
         bioc_doc.infons["journal_iso"] = pm_doc.journal_iso
         bioc_doc.infons["authors"] = ", ".join(pm_doc.authors)
-        bioc_doc.infons["chemicals"] = pm_doc.chemicals
-        bioc_doc.infons["mesh_headings"] = pm_doc.mesh_headings
-        bioc_doc.infons["supplementary_mesh"] = pm_doc.supplementary_mesh
-        bioc_doc.infons["publication_types"] = pm_doc.publication_types
+        bioc_doc.infons["chemicals"] = "\t".join(_format_chemical_for_infons(c) for c in pm_doc.chemicals)
+        bioc_doc.infons["mesh_headings"] = "\t".join(
+            _format_mesh_heading_for_infons(h) for h in pm_doc.mesh_headings
+        )
+        bioc_doc.infons["supplementary_mesh"] = "\t".join(
+            _format_supplementary_mesh_for_infons(s) for s in pm_doc.supplementary_mesh
+        )
+        bioc_doc.infons["publication_types"] = "\t".join(
+            _format_publication_type_for_infons(p) for p in pm_doc.publication_types
+        )
 
         offset = 0
         for section in sections:

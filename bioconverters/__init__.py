@@ -1,7 +1,16 @@
 __docformat__ = "google"
 
-from .pmcxml import PMCArticle, parse_pmcxml, pmcxml2bioc, pmcxml2txt
-from .pubmedxml import PubMedArticle, parse_pubmedxml, pubmedxml2bioc, pubmedxml2txt
+from .pmc_types import PMCArticle
+from .pmcxml import parse_pmcxml, pmcxml2bioc, pmcxml2txt
+from .pubmed_types import (
+    Chemical,
+    MeshHeading,
+    MeshQualifier,
+    PublicationType,
+    PubMedArticle,
+    SupplementaryMeshConcept,
+)
+from .pubmedxml import parse_pubmedxml, pubmedxml2bioc, pubmedxml2txt
 
 __all__ = [
     "parse_pmcxml",
@@ -12,4 +21,9 @@ __all__ = [
     "pubmedxml2bioc",
     "pubmedxml2txt",
     "PubMedArticle",
+    "Chemical",
+    "MeshHeading",
+    "MeshQualifier",
+    "SupplementaryMeshConcept",
+    "PublicationType",
 ]
