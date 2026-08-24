@@ -60,7 +60,7 @@ for text in pmcxml2txt('/path/to/pmc.xml', include_metadata=True):
     ...
 ```
 
-Flags: `sections` (default `("title", "abstract", "article")`, also available: `subtitle`, `back`, `floating`), `include_metadata`, `passage_separator`, `trim_buggy_sentences`, `inject_citations`, `clean_numeric_citations`, `clean_xrefs_in_brackets`, `clear_empty_brackets`, `fix_exponentials` (cleanup flags described below).
+Flags: `sections` (default `("title", "abstract", "article")`, also available: `subtitle`, `back`, `floating`), `include_metadata`, `passage_separator`, `trim_buggy_sentences`, `clean_numeric_citations`, `clean_xrefs_in_brackets`, `clear_empty_brackets`, `fix_exponentials` (cleanup flags described below).
 
 ### `pmcxml2bioc` - BioC documents
 

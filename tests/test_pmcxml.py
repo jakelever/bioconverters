@@ -231,10 +231,12 @@ def test_pmcxml2txt_include_metadata_prepends_header():
     assert texts == ['pmid: 42\npmcid: PMC42\n\nA Great Title']
 
 
-def test_pmcxml2txt_inject_citations_defaults_to_false():
+def test_pmcxml2txt_has_no_inject_citations_param():
+    # plain text output can't show the injected pmid/doi attributes anyway - see
+    # test_inject_citations_has_no_effect_on_pmcxml2bioc for the same reasoning on pmcxml2bioc
     import inspect
 
-    assert inspect.signature(pmcxml2txt).parameters['inject_citations'].default is False
+    assert 'inject_citations' not in inspect.signature(pmcxml2txt).parameters
 
 
 def test_flag_defaults_are_consistent_across_pmc_functions():
@@ -242,9 +244,9 @@ def test_flag_defaults_are_consistent_across_pmc_functions():
 
     for func in (parse_pmcxml, pmcxml2txt):
         params = inspect.signature(func).parameters
-        assert params['inject_citations'].default is False
         assert params['clean_xrefs_in_brackets'].default is True
         assert params['fix_exponentials'].default is True
+    assert inspect.signature(parse_pmcxml).parameters['inject_citations'].default is False
     assert inspect.signature(parse_pmcxml).parameters['return_xml'].default is False
     assert inspect.signature(pmcxml2bioc).parameters['fix_exponentials'].default is True
 

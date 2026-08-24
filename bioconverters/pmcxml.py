@@ -561,7 +561,6 @@ def pmcxml2txt(
     include_metadata: bool = False,
     passage_separator: str = "\n\n",
     trim_buggy_sentences: bool = True,
-    inject_citations: bool = False,
     clean_numeric_citations: bool = True,
     clean_xrefs_in_brackets: bool = True,
     clear_empty_brackets: bool = True,
@@ -581,9 +580,6 @@ def pmcxml2txt(
             passage, into the single returned string.
         trim_buggy_sentences: trim overly long, unbroken runs of text to a maximum length,
             to avoid issues with buggy sentences in some PMC articles.
-        inject_citations: see parse_pmcxml - plain text output can't show the injected
-            pmid/doi attributes anyway, so there's no upside to paying for the ref-list
-            lookup unless you turn this on. Must not be combined with clean_numeric_citations=True.
         clean_numeric_citations: see parse_pmcxml.
         clean_xrefs_in_brackets: see parse_pmcxml.
         clear_empty_brackets: see parse_pmcxml.
@@ -597,7 +593,6 @@ def pmcxml2txt(
         keep_tags=set(),
         return_xml=False,
         trim_buggy_sentences=trim_buggy_sentences,
-        inject_citations=inject_citations,
         clean_numeric_citations=clean_numeric_citations,
         clean_xrefs_in_brackets=clean_xrefs_in_brackets,
         clear_empty_brackets=clear_empty_brackets,
