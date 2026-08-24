@@ -70,6 +70,22 @@ def test_pubmedxml2txt_sections_filters_and_orders():
     assert texts == ['An abstract sentence.']
 
 
+def test_pubmedxml2bioc_sections_filters_and_orders():
+    docs = list(pubmedxml2bioc(StringIO(_TXT_XML), sections=('abstract',)))
+    sections_seen = [p.infons['section'] for p in docs[0].passages]
+    assert sections_seen == ['abstract']
+
+
+def test_pubmedxml2bioc_sections_default_matches_pubmedxml2txt():
+    import inspect
+
+    assert (
+        inspect.signature(pubmedxml2bioc).parameters['sections'].default
+        == inspect.signature(pubmedxml2txt).parameters['sections'].default
+        == ('title', 'abstract')
+    )
+
+
 def test_pubmedxml2txt_custom_passage_separator():
     texts = list(pubmedxml2txt(StringIO(_TXT_XML), passage_separator=' | '))
     assert texts == ['A Test Title | An abstract sentence.']

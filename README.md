@@ -34,6 +34,8 @@ for doc in pubmedxml2bioc('/path/to/medline.xml'):
     ...
 ```
 
+Flags: `sections` (default `("title", "abstract")`).
+
 ### `parse_pubmedxml` - raw dicts, for everything else
 
 ```python

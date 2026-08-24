@@ -344,12 +344,14 @@ def parse_pubmedxml(
 
 def pubmedxml2bioc(
     source: Union[str, TextIO],
+    sections: Iterable[str] = ("title", "abstract"),
     clear_empty_brackets: bool = True,
     fix_exponentials: bool = True,
 ) -> Iterable[bioc.BioCDocument]:
     """
     Args:
         source: path to the MEDLINE xml file
+        sections: which of "title"/"abstract" to include, and in what order.
         clear_empty_brackets: see parse_pubmedxml.
         fix_exponentials: see parse_pubmedxml.
     """
@@ -374,7 +376,7 @@ def pubmedxml2bioc(
         bioc_doc.infons["publication_types"] = pm_doc["publication_types"]
 
         offset = 0
-        for section in ["title", "abstract"]:
+        for section in sections:
             for text_source in pm_doc[section]:
                 passage = bioc.BioCPassage()
                 passage.infons["section"] = section
