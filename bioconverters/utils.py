@@ -250,12 +250,30 @@ def _strip_markup(xml_string: str) -> str:
     return _xml_unescape(_TAG_RE.sub("", xml_string))
 
 
-def _tree_to_xml_string(tree: etree.Element) -> str:
+def _strip_attributes(elem: etree.Element, preserve_attrib_tags) -> None:
+    """
+    Recursively clear every element's attributes (e.g. the "toggle" in
+    "<italic toggle=\"yes\">"), except for elements whose tag is in preserve_attrib_tags,
+    which are left untouched along with their descendants' own tags (a descendant still gets
+    its attributes stripped unless its own tag is also in preserve_attrib_tags).
+    """
+    for child in elem:
+        if child.tag not in preserve_attrib_tags:
+            child.attrib = {}
+        _strip_attributes(child, preserve_attrib_tags)
+
+
+def _tree_to_xml_string(tree: etree.Element, preserve_attrib_tags=frozenset()) -> str:
     """
     Serialize the inner XML content of a tree (no outer wrapper element), e.g.
     "some <sup>1</sup>H text". With no children (keep_tags=set()), this is just the
     tree's plain text, XML-escaped.
+
+    Attributes are stripped from every kept tag (e.g. "<italic toggle=\"yes\">" becomes
+    "<italic>") except for tags listed in preserve_attrib_tags, whose attributes carry
+    meaning that plain markup can't express (e.g. the pmid/doi set by citation injection).
     """
+    _strip_attributes(tree, preserve_attrib_tags)
     inner = _xml_escape(tree.text) if tree.text else ""
     for child in tree:
         inner += etree.tostring(child, encoding="unicode")
@@ -273,6 +291,7 @@ def _extract_passages(
     clean_xrefs_in_brackets: bool = False,
     clear_empty_brackets: bool = False,
     fix_exponentials: bool = False,
+    preserve_attrib_tags=frozenset(),
 ):
     """
     Flatten a list of XML elements into cleaned-up passages, one string per passage. With
@@ -296,6 +315,10 @@ def _extract_passages(
         fix_exponentials: with return_xml=False, recover a digit-preceded numeric "<sup>" as
             "^N" (see _fix_exponentials) - requires "sup" in keep_tags, and has no effect
             when return_xml=True since the tag is already preserved as real markup then
+        preserve_attrib_tags: keep_tags whose original/injected attributes (e.g. the pmid/doi
+            set by citation injection) are kept in the output; every other kept tag has its
+            attributes stripped (e.g. "<italic toggle=\"yes\">" becomes "<italic>") since
+            they're source-XML clutter with no meaning to callers
     """
     if not isinstance(elements, list):
         elements = [elements]
@@ -314,7 +337,7 @@ def _extract_passages(
                 passage_text = _trim_buggy_sentences(passage_text)
 
             tree = spans_to_tree(passage_text, passage["spans"])
-            xml_string = _tree_to_xml_string(tree)
+            xml_string = _tree_to_xml_string(tree, preserve_attrib_tags)
 
             if not return_xml and fix_exponentials:
                 xml_string = _fix_exponentials(xml_string)

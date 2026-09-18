@@ -54,6 +54,7 @@ def _extract_pmc_passages(
         clean_xrefs_in_brackets,
         clear_empty_brackets,
         fix_exponentials,
+        preserve_attrib_tags={_CITATION_TAG},
     )
 
 

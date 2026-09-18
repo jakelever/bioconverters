@@ -90,6 +90,33 @@ def test_inject_citations_adds_pmid_doi_attributes():
     assert '<xref' not in text
 
 
+def test_inject_citations_keeps_citation_attributes_but_strips_other_kept_tags():
+    xml = '''<article>
+        <front><article-meta><article-id pub-id-type="pmid">1</article-id></article-meta></front>
+        <body><p>the <italic toggle="yes">ABC1</italic> protein <xref ref-type="bibr" rid="r1">1</xref>.</p></body>
+        <back><ref-list>
+            <ref id="r1"><element-citation><pub-id pub-id-type="pmid">111</pub-id></element-citation></ref>
+        </ref-list></back>
+    </article>'''
+    docs = list(
+        parse_pmcxml(
+            StringIO(xml),
+            keep_tags={'italic'},
+            inject_citations=True,
+            clean_numeric_citations=False,
+            return_xml=True,
+        )
+    )
+    text = ' '.join(docs[0].article)
+
+    # citation injection's own attributes (pmid/count) are preserved...
+    assert 'pmid="111"' in text
+    assert 'count="1"' in text
+    # ...but an unrelated kept tag's source-XML attribute (toggle) is stripped
+    assert '<italic>ABC1</italic>' in text
+    assert 'toggle' not in text
+
+
 def test_inject_citations_and_clean_numeric_citations_together_raises():
     with pytest.raises(AssertionError):
         list(parse_pmcxml(StringIO(_CITATION_XML), inject_citations=True, clean_numeric_citations=True))

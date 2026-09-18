@@ -74,6 +74,41 @@ def test_extract_title_with_italics():
     )
 
 
+def test_extract_title_with_italics_strips_tag_attributes():
+    # source XML clutter like toggle="yes" on a kept tag shouldn't leak into the output -
+    # only the tag itself carries meaning
+    xml = '<article><article-title>Activating mutations in <italic toggle="yes">ALK</italic> provide a therapeutic target in neuroblastoma</article-title></article>'
+    passages = _extract_passages(
+        [etree.fromstring(xml)],
+        PMC_IGNORE_TAGS,
+        PMC_SPLIT_TAGS,
+        PMC_KEEP_TAGS,
+        return_xml=True,
+        trim_buggy_sentences=True,
+    )
+    assert len(passages) == 1
+    assert (
+        'Activating mutations in <italic>ALK</italic> provide a therapeutic target in neuroblastoma'
+        == passages[0]
+    )
+
+
+def test_extract_title_with_italics_keeps_attributes_for_preserve_attrib_tags():
+    # a keep_tag explicitly opted into preserve_attrib_tags keeps its attributes, unlike an
+    # ordinary kept tag (see test_extract_title_with_italics_strips_tag_attributes)
+    xml = '<article><article-title>Activating mutations in <italic toggle="yes">ALK</italic></article-title></article>'
+    passages = _extract_passages(
+        [etree.fromstring(xml)],
+        PMC_IGNORE_TAGS,
+        PMC_SPLIT_TAGS,
+        PMC_KEEP_TAGS,
+        return_xml=True,
+        trim_buggy_sentences=True,
+        preserve_attrib_tags={'italic'},
+    )
+    assert passages[0] == 'Activating mutations in <italic toggle="yes">ALK</italic>'
+
+
 def test_extract_title_without_keep_tags():
     xml = '<article><article-title>Activating mutations in <italic>ALK</italic> provide a therapeutic target in neuroblastoma</article-title></article>'
     passages = _extract_passages(
