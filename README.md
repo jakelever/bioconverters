@@ -107,6 +107,29 @@ Notable flags:
 - `clean_numeric_citations`, `clean_xrefs_in_brackets`, `clear_empty_brackets` (all default `True`) - see "Cleaning up text" below.
 - `strip_tag_attributes` (default `True`) - with `return_xml=True`, strip source-XML attributes (e.g. the `toggle` in `<italic toggle="yes">`) from every kept tag, since they're clutter with no meaning to callers. Attributes added by `inject_citations` (`pmid`/`doi`/`count`) are always kept regardless of this flag.
 
+## Fetching XML from NCBI with eutils
+
+If you don't already have a PMC/MEDLINE XML file on disk, NCBI's [eutils](https://www.ncbi.nlm.nih.gov/books/NBK25501/) `efetch` endpoint can fetch one directly by ID. This needs `requests` (`pip install requests` - not one of this package's own dependencies):
+
+```python
+from io import StringIO
+
+import requests
+
+from bioconverters import pmcxml2txt
+
+response = requests.get(
+    'https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi',
+    params={'db': 'pmc', 'id': 'PMC3203921', 'rettype': 'xml'},
+)
+response.raise_for_status()
+
+for meta, text in pmcxml2txt(StringIO(response.text)):
+    ...
+```
+
+Swap `db='pmc'`/a PMCID for `db='pubmed'`/a PMID to fetch MEDLINE XML for `parse_pubmedxml`/`pubmedxml2txt`/`pubmedxml2tagged` instead. `response.text` needs wrapping in a `StringIO` either way - a bare string is treated as a file path, not literal XML content. See the [eutils docs](https://www.ncbi.nlm.nih.gov/books/NBK25497/) for request-rate limits and the optional `api_key` parameter for higher ones.
+
 ## Details on text extraction
 
 - Text is extracted using [spans_and_trees](https://github.com/jakelever/spans_and_trees).
