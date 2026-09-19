@@ -478,7 +478,7 @@ def pubmedxml2tagged(
 ) -> Iterator[Tuple[PubMedMeta, str]]:
     """
     Convert a MEDLINE XML file into marked-up text, one (metadata, text) pair per article, with
-    formatting tags (e.g. "<i>", "<sup>") kept inline instead of stripped. A thin wrapper around
+    formatting tags (e.g. `<i>`, `<sup>`) kept inline instead of stripped. A thin wrapper around
     parse_pubmedxml with return_xml=True and keep_tags defaulted to PUBMED_KEEP_TAGS.
 
     Args:

@@ -624,8 +624,8 @@ def pmcxml2tagged(
 ) -> Iterator[Tuple[PMCMeta, str]]:
     """
     Convert a PMC XML file into marked-up text, one (metadata, text) pair per
-    article/sub-article, with formatting tags (e.g. "<sup>", "<italic>") kept inline and
-    in-text citations resolved and kept as "<citation pmid=\"...\">" instead of stripped. A
+    article/sub-article, with formatting tags (e.g. `<sup>`, `<italic>`) kept inline and
+    in-text citations resolved and kept as `<citation pmid="...">` instead of stripped. A
     thin wrapper around parse_pmcxml with return_xml=True, keep_tags defaulted to
     PMC_KEEP_TAGS, and inject_citations=True (so clean_numeric_citations, which can't be
     combined with it, is forced off).
