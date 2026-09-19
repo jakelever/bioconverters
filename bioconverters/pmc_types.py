@@ -9,11 +9,11 @@ class PMCMeta:
     """Metadata common to all PMC articles and sub-articles - the text-free subset of
     `PMCArticle`'s fields, as returned alongside the text by `pmcxml2txt`/`pmcxml2tagged`."""
     
-    pmid: str
-    """PubMed ID, or an empty string if not found."""
-
     pmcid: str
-    """PubMed Central ID, or an empty string if not found."""
+    """PubMed Central ID (this article's own primary key), or an empty string if not found."""
+
+    pmid: Optional[str]
+    """PubMed ID, or None if this article isn't linked to one (e.g. not PubMed-indexed)."""
 
     doi: str
     """DOI, or an empty string if not found."""
@@ -43,11 +43,11 @@ class PMCArticle(PMCMeta):
     # field order/behavior is unaffected: re-annotating an inherited field updates its type
     # in place without moving it, since ordering is fixed by each name's first occurrence
     # when walking the MRO.
-    pmid: str
-    """PubMed ID, or an empty string if not found."""
-
     pmcid: str
-    """PubMed Central ID, or an empty string if not found."""
+    """PubMed Central ID (this article's own primary key), or an empty string if not found."""
+
+    pmid: Optional[str]
+    """PubMed ID, or None if this article isn't linked to one (e.g. not PubMed-indexed)."""
 
     doi: str
     """DOI, or an empty string if not found."""

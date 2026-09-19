@@ -474,7 +474,7 @@ def test_malformed_article_ids_are_skipped():
     # an article-id with no pub-id-type attribute, or with no text, is ignored rather
     # than crashing or being picked up under the wrong key
     docs = list(parse_pmcxml(StringIO(_MALFORMED_ARTICLE_ID_XML), inject_citations=False))
-    assert docs[0].pmid == ''
+    assert docs[0].pmid is None
 
 
 _SEASON_PUBDATE_XML = '''<article>
@@ -633,7 +633,7 @@ _NO_METADATA_XML = '<article><body><p>Just some text.</p></body></article>'
 
 def test_pmcxml2txt_metadata_fields_empty_when_absent_from_source():
     (meta, text), = list(pmcxml2txt(StringIO(_NO_METADATA_XML), sections=('article',)))
-    assert meta.pmid == ''
+    assert meta.pmid is None
     assert meta.pmcid == ''
     assert meta.doi == ''
     assert meta.pub_year is None

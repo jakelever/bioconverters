@@ -253,7 +253,10 @@ def _get_meta_info_for_pmc_article(article_elem) -> PMCMeta:
             pub_id_type = "pmcid"
         id_map[pub_id_type] = a.text.strip().replace("\n", " ")
 
-    pmid_text = id_map.get("pmid", "")
+    # pmid, unlike pmcid/doi, has no empty-string sentinel: not every PMC article is linked to
+    # a PubMed record (e.g. preprints deposited directly to PMC), so None distinguishes "no
+    # link exists" from a genuinely empty id - id_map.get's own None default already does this.
+    pmid_text = id_map.get("pmid")
     pmcid_text = id_map.get("pmcid", "")
     doi_text = id_map.get("doi", "")
 
@@ -319,8 +322,8 @@ def _get_meta_info_for_pmc_article(article_elem) -> PMCMeta:
             journal_iso_text = field.text
 
     return PMCMeta(
-        pmid=pmid_text,
         pmcid=pmcid_text,
+        pmid=pmid_text,
         doi=doi_text,
         pub_year=pub_year,
         pub_month=pub_month,
@@ -458,8 +461,8 @@ def parse_pmcxml(
                 )
 
                 yield PMCArticle(
-                    pmid=sub_meta.pmid,
                     pmcid=sub_meta.pmcid,
+                    pmid=sub_meta.pmid,
                     doi=sub_meta.doi,
                     pub_year=sub_meta.pub_year,
                     pub_month=sub_meta.pub_month,
@@ -553,8 +556,8 @@ def pmcxml2bioc(
 def _pmc_article_meta(doc: PMCArticle) -> PMCMeta:
     """Slice a PMCArticle down to just its metadata fields (no title/abstract/article/etc)."""
     return PMCMeta(
-        pmid=doc.pmid,
         pmcid=doc.pmcid,
+        pmid=doc.pmid,
         doi=doc.doi,
         pub_year=doc.pub_year,
         pub_month=doc.pub_month,

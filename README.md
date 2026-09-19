@@ -68,7 +68,7 @@ You can get the full text cleanly from PMC files with the functions below:
 from bioconverters import pmcxml2txt
 
 for meta, text in pmcxml2txt('/path/to/pmc.xml'):
-    # meta is a PMCMeta dataclass: pmid, pmcid, doi, pub_year/month/day, journal, journal_iso
+    # meta is a PMCMeta dataclass: pmcid, pmid, doi, pub_year/month/day, journal, journal_iso
     # text is a single string, e.g. "Title\n\nAbstract...\n\nBody..."
     ...
 ```
@@ -102,7 +102,7 @@ This returns a `PMCArticle` data structure with the various metadata and text fi
 from bioconverters import parse_pmcxml
 
 for article in parse_pmcxml('/path/to/pmc.xml'):
-    # a PMCArticle dataclass: pmid, pmcid, doi, pub_year/month/day, journal, journal_iso, title, abstract, body, etc
+    # a PMCArticle dataclass: pmcid, pmid, doi, pub_year/month/day, journal, journal_iso, title, abstract, body, etc
     ...
 ```
 
