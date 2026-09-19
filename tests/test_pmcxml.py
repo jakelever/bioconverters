@@ -16,7 +16,10 @@ def table_article():
 
 @pytest.fixture(scope='module')
 def formula_article():
-    article = fetch_xml('PMC2939780', 'pmc')
+    # has MathML formulas (<mml:math>), each wrapped in a <disp-formula>/<inline-formula> -
+    # confirmed by inspecting the raw XML, since PMC's search API doesn't support finding
+    # articles by content like this directly
+    article = fetch_xml('PMC9000000', 'pmc')
     return article
 
 
@@ -34,6 +37,38 @@ def test_convert_pmc_with_table_drops_table_content(table_article):
     all_text = " ".join(p.text for p in all_passages)
     # "ATP binding region" only appears inside the table body, which is now dropped entirely
     assert "ATP binding region" not in all_text
+
+
+def test_convert_pmc_with_mathml_formula_drops_formula_content(formula_article):
+    # every <mml:math> in this real article is wrapped in <disp-formula>/<inline-formula>, both
+    # already-correct (unprefixed, unaffected by the Clark-notation bug fixed here) ignore_tags
+    # entries, so this doesn't exercise the fix itself (see test_bare_mathml_is_dropped for
+    # that) - it's a real-world sanity check that formula-heavy content still parses cleanly and
+    # doesn't leak raw LaTeX/MathML source into the output
+    file = StringIO(formula_article)
+    all_passages = []
+    for doc in pmcxml2bioc(file):
+        all_passages.extend(doc.passages)
+    all_text = " ".join(p.text for p in all_passages)
+    assert '\\documentclass' not in all_text
+    assert 'mml:m' not in all_text
+    assert '<mml' not in all_text
+
+
+_BARE_MATHML_XML = '''<article xmlns:mml="http://www.w3.org/1998/Math/MathML">
+    <front><article-meta><article-id pub-id-type="pmid">1</article-id></article-meta></front>
+    <body><p>Before <mml:math><mml:mi>ZZFORMULAZZ</mml:mi></mml:math> after.</p></body>
+</article>'''
+
+
+def test_bare_mathml_is_dropped():
+    # JATS allows <mml:math> directly inside <p> (and several other elements), not just wrapped
+    # in <disp-formula>/<inline-formula> - this is the case the Clark-notation fix actually
+    # covers, since a bare <mml:math> isn't blanked by ignoring those two wrapper tags
+    texts = list(pmcxml2txt(StringIO(_BARE_MATHML_XML), sections=('article',)))
+    text = texts[0]
+    assert 'ZZFORMULAZZ' not in text
+    assert text == 'Before after.'
 
 
 def test_citation_offset_article_parses(citation_offset_article):
