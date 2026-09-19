@@ -473,13 +473,14 @@ def pubmedxml2tagged(
     sections: Iterable[str] = ("title", "abstract"),
     passage_separator: str = "\n\n",
     keep_tags=PUBMED_KEEP_TAGS,
-    clear_empty_brackets: bool = True,
-    fix_exponentials: bool = True,
 ) -> Iterator[Tuple[PubMedMeta, str]]:
     """
     Convert a MEDLINE XML file into marked-up text, one (metadata, text) pair per article, with
     formatting tags (e.g. `<i>`, `<sup>`) kept inline instead of stripped. A thin wrapper around
     parse_pubmedxml with return_xml=True and keep_tags defaulted to PUBMED_KEEP_TAGS.
+    clear_empty_brackets and fix_exponentials are always off - this is meant to keep markup
+    intact rather than clean up the text, and fix_exponentials has no effect under
+    return_xml=True anyway (see parse_pubmedxml).
 
     Args:
         source: path to the MEDLINE xml file
@@ -487,8 +488,6 @@ def pubmedxml2tagged(
         passage_separator: string used to join the extracted passages into the single
             returned text string.
         keep_tags: see parse_pubmedxml. Defaults to `pubmed_constants.PUBMED_KEEP_TAGS`.
-        clear_empty_brackets: see parse_pubmedxml.
-        fix_exponentials: see parse_pubmedxml.
 
     Returns:
         An iterator over one (PubMedMeta, marked-up text) pair per article
@@ -497,8 +496,8 @@ def pubmedxml2tagged(
         source,
         return_xml=True,
         keep_tags=keep_tags,
-        clear_empty_brackets=clear_empty_brackets,
-        fix_exponentials=fix_exponentials,
+        clear_empty_brackets=False,
+        fix_exponentials=False,
     ):
         text = passage_separator.join(pm_doc.iter_text(sections))
         yield _pubmed_article_meta(pm_doc), text

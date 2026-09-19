@@ -617,9 +617,6 @@ def pmcxml2tagged(
     passage_separator: str = "\n\n",
     keep_tags=PMC_KEEP_TAGS,
     trim_buggy_sentences: bool = True,
-    clean_xrefs_in_brackets: bool = True,
-    clear_empty_brackets: bool = True,
-    fix_exponentials: bool = True,
     strip_tag_attributes: bool = True,
 ) -> Iterator[Tuple[PMCMeta, str]]:
     """
@@ -628,7 +625,10 @@ def pmcxml2tagged(
     in-text citations resolved and kept as `<citation pmid="...">` instead of stripped. A
     thin wrapper around parse_pmcxml with return_xml=True, keep_tags defaulted to
     PMC_KEEP_TAGS, and inject_citations=True (so clean_numeric_citations, which can't be
-    combined with it, is forced off).
+    combined with it, is forced off). clean_xrefs_in_brackets/clear_empty_brackets/
+    fix_exponentials are forced off too - this is meant to keep markup/citations intact
+    rather than clean up the text, and fix_exponentials has no effect under return_xml=True
+    anyway (see parse_pmcxml).
 
     Args:
         source: The text or file handle containing the PMC XML
@@ -639,9 +639,6 @@ def pmcxml2tagged(
         keep_tags: see parse_pmcxml. Defaults to `pmc_constants.PMC_KEEP_TAGS`.
         trim_buggy_sentences: trim overly long, unbroken runs of text to a maximum length,
             to avoid issues with buggy sentences in some PMC articles.
-        clean_xrefs_in_brackets: see parse_pmcxml.
-        clear_empty_brackets: see parse_pmcxml.
-        fix_exponentials: see parse_pmcxml.
         strip_tag_attributes: see parse_pmcxml.
 
     Returns:
@@ -654,9 +651,9 @@ def pmcxml2tagged(
         trim_buggy_sentences=trim_buggy_sentences,
         inject_citations=True,
         clean_numeric_citations=False,
-        clean_xrefs_in_brackets=clean_xrefs_in_brackets,
-        clear_empty_brackets=clear_empty_brackets,
-        fix_exponentials=fix_exponentials,
+        clean_xrefs_in_brackets=False,
+        clear_empty_brackets=False,
+        fix_exponentials=False,
         strip_tag_attributes=strip_tag_attributes,
     ):
         text = passage_separator.join(doc.iter_text(sections))

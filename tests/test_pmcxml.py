@@ -450,15 +450,42 @@ def test_pmcxml2tagged_keep_tags_defaults_to_pmc_keep_tags():
     assert inspect.signature(pmcxml2tagged).parameters['keep_tags'].default == PMC_KEEP_TAGS
 
 
-def test_pmcxml2tagged_has_no_inject_citations_or_clean_numeric_citations_params():
-    # both are forced (inject_citations=True, clean_numeric_citations=False) since the whole
-    # point of this wrapper is resolved, kept citations - exposing either would let a caller
-    # recreate the combination parse_pmcxml explicitly rejects
+def test_pmcxml2tagged_has_no_inject_citations_or_cleanup_params():
+    # inject_citations is forced True (this wrapper's whole point is resolved, kept
+    # citations) and clean_numeric_citations forced False to match (can't combine with
+    # inject_citations=True) - exposing either would let a caller recreate the combination
+    # parse_pmcxml explicitly rejects. clean_xrefs_in_brackets/clear_empty_brackets/
+    # fix_exponentials are forced False too - this wrapper is about keeping markup/citations
+    # intact, not cleaning text, and fix_exponentials has no effect under return_xml=True anyway
     import inspect
 
     params = inspect.signature(pmcxml2tagged).parameters
     assert 'inject_citations' not in params
     assert 'clean_numeric_citations' not in params
+    assert 'clean_xrefs_in_brackets' not in params
+    assert 'clear_empty_brackets' not in params
+    assert 'fix_exponentials' not in params
+
+
+def test_pmcxml2tagged_keeps_dangling_bracketed_reference():
+    # clean_xrefs_in_brackets is always off now, unlike pmcxml2txt's default - this wrapper
+    # keeps markup/citations intact rather than cleaning the text up
+    results = list(pmcxml2tagged(StringIO(_PARENTHETICAL_XREF_XML), sections=('article',)))
+    _, text = results[0]
+    assert 'shown in (Table 3) below' in text
+
+
+_EMPTY_BRACKET_XML = '''<article>
+    <front><article-meta><article-id pub-id-type="pmid">1</article-id></article-meta></front>
+    <body><p>The tool ( ) works well.</p></body>
+</article>'''
+
+
+def test_pmcxml2tagged_keeps_empty_brackets():
+    # clear_empty_brackets is always off now too
+    results = list(pmcxml2tagged(StringIO(_EMPTY_BRACKET_XML), sections=('article',)))
+    _, text = results[0]
+    assert 'tool ( ) works' in text
 
 
 _MALFORMED_ARTICLE_ID_XML = '''<article>

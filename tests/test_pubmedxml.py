@@ -588,12 +588,41 @@ def test_pubmedxml2tagged_sections_filters_and_orders():
     assert texts == ['Some <b>bold</b> &amp; <i>italic</i> text.']
 
 
-def test_pubmedxml2tagged_fix_exponentials_keeps_sup_tag_rather_than_converting():
+def test_pubmedxml2tagged_has_no_cleanup_params():
+    # clear_empty_brackets/fix_exponentials are always off - this wrapper is about keeping
+    # markup intact rather than cleaning the text up, and fix_exponentials has no effect
+    # under return_xml=True anyway
+    import inspect
+
+    params = inspect.signature(pubmedxml2tagged).parameters
+    assert 'clear_empty_brackets' not in params
+    assert 'fix_exponentials' not in params
+
+
+_EMPTY_BRACKET_XML = '''<PubmedArticle>
+    <MedlineCitation>
+        <PMID>99</PMID>
+        <Article>
+            <Journal><JournalIssue><PubDate><Year>2020</Year></PubDate></JournalIssue></Journal>
+            <ArticleTitle>A Test Title</ArticleTitle>
+            <Abstract><AbstractText>The tool ( ) works well.</AbstractText></Abstract>
+        </Article>
+    </MedlineCitation>
+    <PubmedData><ArticleIdList></ArticleIdList></PubmedData>
+</PubmedArticle>'''
+
+
+def test_pubmedxml2tagged_keeps_empty_brackets():
+    results = list(pubmedxml2tagged(StringIO(_EMPTY_BRACKET_XML), sections=('abstract',)))
+    _, text = results[0]
+    assert 'tool ( ) works' in text
+
+
+def test_pubmedxml2tagged_keeps_sup_tag_rather_than_converting_exponent():
     # with return_xml=True the <sup> tag itself already conveys the exponent, so
-    # fix_exponentials's textual "^N" conversion (return_xml=False only) never fires
-    results = list(
-        pubmedxml2tagged(StringIO(_EXPONENTIAL_XML), sections=('abstract',), fix_exponentials=True)
-    )
+    # fix_exponentials's textual "^N" conversion (return_xml=False only) never fires -
+    # pubmedxml2tagged doesn't even expose fix_exponentials, since it'd have no effect
+    results = list(pubmedxml2tagged(StringIO(_EXPONENTIAL_XML), sections=('abstract',)))
     _, text = results[0]
     assert '<sup>8</sup>' in text
     assert '^' not in text
