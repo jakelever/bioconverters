@@ -96,6 +96,8 @@ for meta, text in pmcxml2tagged('/path/to/pmc.xml'):
 
 ### `parse_pmcxml` [[api]](https://jakelever.github.io/bioconverters/bioconverters.html#parse_pmcxml) - full control over parsing
 
+This returns a `PMCArticle` data structure with the various metadata and text fields. Check [the api](https://jakelever.github.io/bioconverters/bioconverters.html#PMCArticle) for the full structure.
+
 ```python
 from bioconverters import parse_pmcxml
 
