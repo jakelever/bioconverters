@@ -13,11 +13,11 @@ from .pubmed_types import (
     MeshQualifier,
     PublicationType,
     PubMedArticle,
+    PubMedMeta,
     SupplementaryMeshConcept,
 )
 from .utils import (
     _extract_passages,
-    _format_metadata_header,
     _remove_brackets_from_titles,
     _remove_brackets_without_words,
 )
@@ -421,84 +421,77 @@ def pubmedxml2bioc(
         yield bioc_doc
 
 
+def _pubmed_article_meta(pm_doc: PubMedArticle) -> PubMedMeta:
+    """Slice a PubMedArticle down to just its metadata fields (no title/abstract)."""
+    return PubMedMeta(
+        pmid=pm_doc.pmid,
+        pmcid=pm_doc.pmcid,
+        doi=pm_doc.doi,
+        pub_year=pm_doc.pub_year,
+        pub_month=pm_doc.pub_month,
+        pub_day=pm_doc.pub_day,
+        journal=pm_doc.journal,
+        journal_iso=pm_doc.journal_iso,
+        authors=pm_doc.authors,
+        chemicals=pm_doc.chemicals,
+        mesh_headings=pm_doc.mesh_headings,
+        supplementary_mesh=pm_doc.supplementary_mesh,
+        publication_types=pm_doc.publication_types,
+    )
+
+
 def pubmedxml2txt(
     source: Union[str, TextIO],
     sections: Iterable[str] = ("title", "abstract"),
-    include_metadata: bool = False,
     passage_separator: str = "\n\n",
     clear_empty_brackets: bool = True,
     fix_exponentials: bool = True,
-) -> Iterator[str]:
+) -> Iterator[Tuple[PubMedMeta, str]]:
     """
-    Convert a MEDLINE XML file into plain text, one string per article.
+    Convert a MEDLINE XML file into plain text, one (metadata, text) pair per article.
 
     Args:
         source: path to the MEDLINE xml file
         sections: which of "title"/"abstract" to include, and in what order.
-        include_metadata: prepend a "label: value" header block (pmid, pmcid, doi, year,
-            month, day, journal, authors) before the text, separated by passage_separator
-            like any other passage. Fields that are empty/missing are omitted.
-        passage_separator: string used to join the header (if any), and every extracted
-            passage, into the single returned string.
+        passage_separator: string used to join the extracted passages into the single
+            returned text string.
         clear_empty_brackets: see parse_pubmedxml.
         fix_exponentials: see parse_pubmedxml.
 
     Returns:
-        An iterator over one plain text string per article
+        An iterator over one (PubMedMeta, text) pair per article
     """
     for pm_doc in parse_pubmedxml(
         source, clear_empty_brackets=clear_empty_brackets, fix_exponentials=fix_exponentials
     ):
-        parts = []
-        if include_metadata:
-            header = _format_metadata_header(
-                {
-                    "pmid": pm_doc.pmid,
-                    "pmcid": pm_doc.pmcid,
-                    "doi": pm_doc.doi,
-                    "year": pm_doc.pub_year,
-                    "month": pm_doc.pub_month,
-                    "day": pm_doc.pub_day,
-                    "journal": pm_doc.journal,
-                    "authors": "; ".join(pm_doc.authors) if pm_doc.authors else None,
-                }
-            )
-            if header:
-                parts.append(header)
-
-        parts.extend(pm_doc.iter_text(sections))
-
-        yield passage_separator.join(parts)
+        text = passage_separator.join(pm_doc.iter_text(sections))
+        yield _pubmed_article_meta(pm_doc), text
 
 
 def pubmedxml2tagged(
     source: Union[str, TextIO],
     sections: Iterable[str] = ("title", "abstract"),
-    include_metadata: bool = False,
     passage_separator: str = "\n\n",
     keep_tags=PUBMED_KEEP_TAGS,
     clear_empty_brackets: bool = True,
     fix_exponentials: bool = True,
-) -> Iterator[str]:
+) -> Iterator[Tuple[PubMedMeta, str]]:
     """
-    Convert a MEDLINE XML file into marked-up text, one string per article, with formatting
-    tags (e.g. "<i>", "<sup>") kept inline instead of stripped. A thin wrapper around
+    Convert a MEDLINE XML file into marked-up text, one (metadata, text) pair per article, with
+    formatting tags (e.g. "<i>", "<sup>") kept inline instead of stripped. A thin wrapper around
     parse_pubmedxml with return_xml=True and keep_tags defaulted to PUBMED_KEEP_TAGS.
 
     Args:
         source: path to the MEDLINE xml file
         sections: which of "title"/"abstract" to include, and in what order.
-        include_metadata: prepend a "label: value" header block (pmid, pmcid, doi, year,
-            month, day, journal, authors) before the text, separated by passage_separator
-            like any other passage. Fields that are empty/missing are omitted.
-        passage_separator: string used to join the header (if any), and every extracted
-            passage, into the single returned string.
+        passage_separator: string used to join the extracted passages into the single
+            returned text string.
         keep_tags: see parse_pubmedxml. Defaults to `pubmed_constants.PUBMED_KEEP_TAGS`.
         clear_empty_brackets: see parse_pubmedxml.
         fix_exponentials: see parse_pubmedxml.
 
     Returns:
-        An iterator over one marked-up text string per article
+        An iterator over one (PubMedMeta, marked-up text) pair per article
     """
     for pm_doc in parse_pubmedxml(
         source,
@@ -507,23 +500,5 @@ def pubmedxml2tagged(
         clear_empty_brackets=clear_empty_brackets,
         fix_exponentials=fix_exponentials,
     ):
-        parts = []
-        if include_metadata:
-            header = _format_metadata_header(
-                {
-                    "pmid": pm_doc.pmid,
-                    "pmcid": pm_doc.pmcid,
-                    "doi": pm_doc.doi,
-                    "year": pm_doc.pub_year,
-                    "month": pm_doc.pub_month,
-                    "day": pm_doc.pub_day,
-                    "journal": pm_doc.journal,
-                    "authors": "; ".join(pm_doc.authors) if pm_doc.authors else None,
-                }
-            )
-            if header:
-                parts.append(header)
-
-        parts.extend(pm_doc.iter_text(sections))
-
-        yield passage_separator.join(parts)
+        text = passage_separator.join(pm_doc.iter_text(sections))
+        yield _pubmed_article_meta(pm_doc), text

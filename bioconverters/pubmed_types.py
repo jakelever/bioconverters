@@ -73,6 +73,53 @@ class PublicationType:
 
 
 @dataclass
+class PubMedMeta:
+    """Metadata for a MEDLINE/PubMed article - the text-free subset of `PubMedArticle`'s
+    fields (everything but title/abstract), as returned alongside the text by
+    `pubmedxml2txt`/`pubmedxml2tagged`."""
+
+    pmid: str
+    """PubMed ID."""
+
+    pmcid: Optional[str]
+    """PubMed Central ID, or None if not linked."""
+
+    doi: Optional[str]
+    """DOI, or None if not found."""
+
+    pub_year: Optional[int]
+    """Publication year, or None if not found."""
+
+    pub_month: Optional[int]
+    """Publication month, or None if not found."""
+
+    pub_day: Optional[int]
+    """Publication day, or None if not found."""
+
+    journal: str
+    """Journal title, or an empty string if not found."""
+
+    journal_iso: str
+    """ISO abbreviation of the journal title, or an empty string if not found."""
+
+    authors: Iterable[str]
+    """Author names, in document order."""
+
+    chemicals: Iterable[Chemical]
+    """Chemical substances, in document order."""
+
+    mesh_headings: Iterable[MeshHeading]
+    """MeSH headings, each with its own qualifiers nested inside, in document order."""
+
+    supplementary_mesh: Iterable[SupplementaryMeshConcept]
+    """Supplementary MeSH concepts, in document order."""
+
+    publication_types: Iterable[PublicationType]
+    """Publication types, in document order (excludes generic NLM support-type labels
+    like "Research Support, N.I.H., Extramural")."""
+
+
+@dataclass
 class PubMedArticle:
     """One MEDLINE/PubMed article, as extracted by `parse_pubmedxml`."""
 

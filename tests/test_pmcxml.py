@@ -2,7 +2,7 @@ from io import StringIO
 
 import pytest
 
-from bioconverters import parse_pmcxml, pmcxml2bioc, pmcxml2tagged, pmcxml2txt
+from bioconverters import PMCMeta, parse_pmcxml, pmcxml2bioc, pmcxml2tagged, pmcxml2txt
 from bioconverters.pmcxml import _apply_pmc_xlink_fix
 
 from .util import fetch_xml
@@ -65,8 +65,8 @@ def test_bare_mathml_is_dropped():
     # JATS allows <mml:math> directly inside <p> (and several other elements), not just wrapped
     # in <disp-formula>/<inline-formula> - this is the case the Clark-notation fix actually
     # covers, since a bare <mml:math> isn't blanked by ignoring those two wrapper tags
-    texts = list(pmcxml2txt(StringIO(_BARE_MATHML_XML), sections=('article',)))
-    text = texts[0]
+    results = list(pmcxml2txt(StringIO(_BARE_MATHML_XML), sections=('article',)))
+    _, text = results[0]
     assert 'ZZFORMULAZZ' not in text
     assert text == 'Before after.'
 
@@ -308,23 +308,37 @@ _TXT_XML = '''<article>
 
 
 def test_pmcxml2txt_joins_default_sections_with_separator():
-    texts = list(pmcxml2txt(StringIO(_TXT_XML)))
+    results = list(pmcxml2txt(StringIO(_TXT_XML)))
+    texts = [text for _, text in results]
     assert texts == ['A Great Title\n\nAn abstract sentence.\n\nBody text here.']
 
 
 def test_pmcxml2txt_sections_filters_and_orders():
-    texts = list(pmcxml2txt(StringIO(_TXT_XML), sections=('article', 'title')))
+    results = list(pmcxml2txt(StringIO(_TXT_XML), sections=('article', 'title')))
+    texts = [text for _, text in results]
     assert texts == ['Body text here.\n\nA Great Title']
 
 
 def test_pmcxml2txt_custom_passage_separator():
-    texts = list(pmcxml2txt(StringIO(_TXT_XML), sections=('title', 'abstract'), passage_separator=' | '))
+    results = list(pmcxml2txt(StringIO(_TXT_XML), sections=('title', 'abstract'), passage_separator=' | '))
+    texts = [text for _, text in results]
     assert texts == ['A Great Title | An abstract sentence.']
 
 
-def test_pmcxml2txt_include_metadata_prepends_header():
-    texts = list(pmcxml2txt(StringIO(_TXT_XML), sections=('title',), include_metadata=True))
-    assert texts == ['pmid: 42\npmcid: PMC42\n\nA Great Title']
+def test_pmcxml2txt_yields_metadata_alongside_text():
+    (meta, text), = list(pmcxml2txt(StringIO(_TXT_XML), sections=('title',)))
+    assert isinstance(meta, PMCMeta)
+    assert meta.pmid == '42'
+    assert meta.pmcid == 'PMC42'
+    assert text == 'A Great Title'
+
+
+def test_pmcxml2txt_has_no_include_metadata_param():
+    # metadata is always returned now, as the first element of the (meta, text) tuple - there's
+    # no longer a flag to opt in/out of it
+    import inspect
+
+    assert 'include_metadata' not in inspect.signature(pmcxml2txt).parameters
 
 
 def test_pmcxml2txt_has_no_inject_citations_param():
@@ -378,8 +392,8 @@ _EXPONENTIAL_XML = '''<article>
 
 
 def test_fix_exponentials_true_converts_exponent_via_pmcxml2txt():
-    texts = list(pmcxml2txt(StringIO(_EXPONENTIAL_XML), sections=('article',), fix_exponentials=True))
-    text = texts[0]
+    results = list(pmcxml2txt(StringIO(_EXPONENTIAL_XML), sections=('article',), fix_exponentials=True))
+    _, text = results[0]
     assert '3x10^8 m/s' in text
     # ordinal and isotope notation are untouched
     assert '1st century' in text
@@ -387,8 +401,8 @@ def test_fix_exponentials_true_converts_exponent_via_pmcxml2txt():
 
 
 def test_fix_exponentials_false_leaves_exponent_glued_via_pmcxml2txt():
-    texts = list(pmcxml2txt(StringIO(_EXPONENTIAL_XML), sections=('article',), fix_exponentials=False))
-    text = texts[0]
+    results = list(pmcxml2txt(StringIO(_EXPONENTIAL_XML), sections=('article',), fix_exponentials=False))
+    _, text = results[0]
     assert '3x108 m/s' in text
     assert '^' not in text
 
@@ -405,9 +419,11 @@ _TAGGED_XML = '''<article>
 
 
 def test_pmcxml2tagged_keeps_markup_citations_and_strips_source_attributes():
-    texts = list(pmcxml2tagged(StringIO(_TAGGED_XML), sections=('title', 'article')))
-    text = texts[0]
+    results = list(pmcxml2tagged(StringIO(_TAGGED_XML), sections=('title', 'article')))
+    meta, text = results[0]
 
+    assert isinstance(meta, PMCMeta)
+    assert meta.pmid == '1'
     # formatting tags are kept, but their source-XML attributes (toggle) are stripped
     assert '<italic>ABC1</italic>' in text
     assert 'toggle' not in text
@@ -419,10 +435,11 @@ def test_pmcxml2tagged_keeps_markup_citations_and_strips_source_attributes():
 
 
 def test_pmcxml2tagged_strip_tag_attributes_false_keeps_source_attributes():
-    texts = list(
+    results = list(
         pmcxml2tagged(StringIO(_TAGGED_XML), sections=('article',), strip_tag_attributes=False)
     )
-    assert '<italic toggle="yes">ABC1</italic>' in texts[0]
+    _, text = results[0]
+    assert '<italic toggle="yes">ABC1</italic>' in text
 
 
 def test_pmcxml2tagged_keep_tags_defaults_to_pmc_keep_tags():
@@ -614,8 +631,10 @@ def test_pmcxml2bioc_raises_runtime_error_on_malformed_xml():
 _NO_METADATA_XML = '<article><body><p>Just some text.</p></body></article>'
 
 
-def test_pmcxml2txt_include_metadata_omits_header_when_all_fields_empty():
-    texts = list(
-        pmcxml2txt(StringIO(_NO_METADATA_XML), sections=('article',), include_metadata=True)
-    )
-    assert texts == ['Just some text.']
+def test_pmcxml2txt_metadata_fields_empty_when_absent_from_source():
+    (meta, text), = list(pmcxml2txt(StringIO(_NO_METADATA_XML), sections=('article',)))
+    assert meta.pmid == ''
+    assert meta.pmcid == ''
+    assert meta.doi == ''
+    assert meta.pub_year is None
+    assert text == 'Just some text.'

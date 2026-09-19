@@ -2,13 +2,13 @@ import calendar
 import io
 import re
 import xml.etree.ElementTree as etree
-from typing import Iterable, Iterator, TextIO, TypedDict, Union
+from typing import Iterable, Iterator, TextIO, Tuple, TypedDict, Union
 
 import bioc
 
 from .pmc_constants import PMC_IGNORE_TAGS, PMC_KEEP_TAGS, PMC_SPLIT_TAGS
-from .pmc_types import PMCArticle, _PMCMeta
-from .utils import _extract_passages, _format_metadata_header, _remove_brackets_from_titles
+from .pmc_types import PMCArticle, PMCMeta
+from .utils import _extract_passages, _remove_brackets_from_titles
 
 _MONTH_NAME_TO_NUMBER = {m: i for i, m in enumerate(calendar.month_name)}
 _MONTH_NAME_TO_NUMBER.update({m: i for i, m in enumerate(calendar.month_abbr)})
@@ -239,7 +239,7 @@ def _field_text(elem, tag):
     return field.text.strip().replace("\n", " ")
 
 
-def _get_meta_info_for_pmc_article(article_elem) -> _PMCMeta:
+def _get_meta_info_for_pmc_article(article_elem) -> PMCMeta:
     # Attempt to extract the PubMed ID, PubMed Central ID and DOI
     id_map = {}
     article_id = article_elem.findall("./front/article-meta/article-id") + article_elem.findall(
@@ -318,7 +318,7 @@ def _get_meta_info_for_pmc_article(article_elem) -> _PMCMeta:
         if field.attrib.get("journal-id-type") == "iso-abbrev":
             journal_iso_text = field.text
 
-    return _PMCMeta(
+    return PMCMeta(
         pmid=pmid_text,
         pmcid=pmcid_text,
         doi=doi_text,
@@ -550,29 +550,39 @@ def pmcxml2bioc(
         raise RuntimeError("Parsing error in PMC xml file: %s" % source)
 
 
+def _pmc_article_meta(doc: PMCArticle) -> PMCMeta:
+    """Slice a PMCArticle down to just its metadata fields (no title/abstract/article/etc)."""
+    return PMCMeta(
+        pmid=doc.pmid,
+        pmcid=doc.pmcid,
+        doi=doc.doi,
+        pub_year=doc.pub_year,
+        pub_month=doc.pub_month,
+        pub_day=doc.pub_day,
+        journal=doc.journal,
+        journal_iso=doc.journal_iso,
+    )
+
+
 def pmcxml2txt(
     source: Union[str, TextIO],
     sections: Iterable[str] = ("title", "subtitle", "abstract", "article", "back", "floating"),
-    include_metadata: bool = False,
     passage_separator: str = "\n\n",
     trim_buggy_sentences: bool = True,
     clean_numeric_citations: bool = True,
     clean_xrefs_in_brackets: bool = True,
     clear_empty_brackets: bool = True,
     fix_exponentials: bool = True,
-) -> Iterator[str]:
+) -> Iterator[Tuple[PMCMeta, str]]:
     """
-    Convert a PMC XML file into plain text, one string per article/sub-article.
+    Convert a PMC XML file into plain text, one (metadata, text) pair per article/sub-article.
 
     Args:
         source: The text or file handle containing the PMC XML
         sections: which of the six PMCArticle text fields ("title", "subtitle", "abstract",
             "article", "back", "floating") to include, and in what order.
-        include_metadata: prepend a "label: value" header block (pmid, pmcid, doi, year,
-            month, day, journal) before the text, separated by passage_separator like any
-            other passage. Fields that are empty/missing are omitted.
-        passage_separator: string used to join the header (if any), and every extracted
-            passage, into the single returned string.
+        passage_separator: string used to join the extracted passages into the single
+            returned text string.
         trim_buggy_sentences: trim overly long, unbroken runs of text to a maximum length,
             to avoid issues with buggy sentences in some PMC articles.
         clean_numeric_citations: see parse_pmcxml.
@@ -581,7 +591,7 @@ def pmcxml2txt(
         fix_exponentials: see parse_pmcxml.
 
     Returns:
-        An iterator over one plain text string per article/sub-article
+        An iterator over one (PMCMeta, text) pair per article/sub-article
     """
     for doc in parse_pmcxml(
         source,
@@ -593,31 +603,13 @@ def pmcxml2txt(
         clear_empty_brackets=clear_empty_brackets,
         fix_exponentials=fix_exponentials,
     ):
-        parts = []
-        if include_metadata:
-            header = _format_metadata_header(
-                {
-                    "pmid": doc.pmid,
-                    "pmcid": doc.pmcid,
-                    "doi": doc.doi,
-                    "year": doc.pub_year,
-                    "month": doc.pub_month,
-                    "day": doc.pub_day,
-                    "journal": doc.journal,
-                }
-            )
-            if header:
-                parts.append(header)
-
-        parts.extend(doc.iter_text(sections))
-
-        yield passage_separator.join(parts)
+        text = passage_separator.join(doc.iter_text(sections))
+        yield _pmc_article_meta(doc), text
 
 
 def pmcxml2tagged(
     source: Union[str, TextIO],
     sections: Iterable[str] = ("title", "subtitle", "abstract", "article", "back", "floating"),
-    include_metadata: bool = False,
     passage_separator: str = "\n\n",
     keep_tags=PMC_KEEP_TAGS,
     trim_buggy_sentences: bool = True,
@@ -625,23 +617,21 @@ def pmcxml2tagged(
     clear_empty_brackets: bool = True,
     fix_exponentials: bool = True,
     strip_tag_attributes: bool = True,
-) -> Iterator[str]:
+) -> Iterator[Tuple[PMCMeta, str]]:
     """
-    Convert a PMC XML file into marked-up text, one string per article/sub-article, with
-    formatting tags (e.g. "<sup>", "<italic>") kept inline and in-text citations resolved and
-    kept as "<citation pmid=\"...\">" instead of stripped. A thin wrapper around parse_pmcxml
-    with return_xml=True, keep_tags defaulted to PMC_KEEP_TAGS, and inject_citations=True (so
-    clean_numeric_citations, which can't be combined with it, is forced off).
+    Convert a PMC XML file into marked-up text, one (metadata, text) pair per
+    article/sub-article, with formatting tags (e.g. "<sup>", "<italic>") kept inline and
+    in-text citations resolved and kept as "<citation pmid=\"...\">" instead of stripped. A
+    thin wrapper around parse_pmcxml with return_xml=True, keep_tags defaulted to
+    PMC_KEEP_TAGS, and inject_citations=True (so clean_numeric_citations, which can't be
+    combined with it, is forced off).
 
     Args:
         source: The text or file handle containing the PMC XML
         sections: which of the six PMCArticle text fields ("title", "subtitle", "abstract",
             "article", "back", "floating") to include, and in what order.
-        include_metadata: prepend a "label: value" header block (pmid, pmcid, doi, year,
-            month, day, journal) before the text, separated by passage_separator like any
-            other passage. Fields that are empty/missing are omitted.
-        passage_separator: string used to join the header (if any), and every extracted
-            passage, into the single returned string.
+        passage_separator: string used to join the extracted passages into the single
+            returned text string.
         keep_tags: see parse_pmcxml. Defaults to `pmc_constants.PMC_KEEP_TAGS`.
         trim_buggy_sentences: trim overly long, unbroken runs of text to a maximum length,
             to avoid issues with buggy sentences in some PMC articles.
@@ -651,7 +641,7 @@ def pmcxml2tagged(
         strip_tag_attributes: see parse_pmcxml.
 
     Returns:
-        An iterator over one marked-up text string per article/sub-article
+        An iterator over one (PMCMeta, marked-up text) pair per article/sub-article
     """
     for doc in parse_pmcxml(
         source,
@@ -665,22 +655,5 @@ def pmcxml2tagged(
         fix_exponentials=fix_exponentials,
         strip_tag_attributes=strip_tag_attributes,
     ):
-        parts = []
-        if include_metadata:
-            header = _format_metadata_header(
-                {
-                    "pmid": doc.pmid,
-                    "pmcid": doc.pmcid,
-                    "doi": doc.doi,
-                    "year": doc.pub_year,
-                    "month": doc.pub_month,
-                    "day": doc.pub_day,
-                    "journal": doc.journal,
-                }
-            )
-            if header:
-                parts.append(header)
-
-        parts.extend(doc.iter_text(sections))
-
-        yield passage_separator.join(parts)
+        text = passage_separator.join(doc.iter_text(sections))
+        yield _pmc_article_meta(doc), text

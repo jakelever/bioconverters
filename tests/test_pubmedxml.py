@@ -7,6 +7,7 @@ from bioconverters import (
     MeshHeading,
     MeshQualifier,
     PublicationType,
+    PubMedMeta,
     SupplementaryMeshConcept,
     parse_pubmedxml,
     pubmedxml2bioc,
@@ -71,12 +72,14 @@ _TXT_XML = '''<PubmedArticle>
 
 
 def test_pubmedxml2txt_joins_default_sections_with_separator():
-    texts = list(pubmedxml2txt(StringIO(_TXT_XML)))
+    results = list(pubmedxml2txt(StringIO(_TXT_XML)))
+    texts = [text for _, text in results]
     assert texts == ['A Test Title\n\nAn abstract sentence.']
 
 
 def test_pubmedxml2txt_sections_filters_and_orders():
-    texts = list(pubmedxml2txt(StringIO(_TXT_XML), sections=('abstract',)))
+    results = list(pubmedxml2txt(StringIO(_TXT_XML), sections=('abstract',)))
+    texts = [text for _, text in results]
     assert texts == ['An abstract sentence.']
 
 
@@ -97,13 +100,26 @@ def test_pubmedxml2bioc_sections_default_matches_pubmedxml2txt():
 
 
 def test_pubmedxml2txt_custom_passage_separator():
-    texts = list(pubmedxml2txt(StringIO(_TXT_XML), passage_separator=' | '))
+    results = list(pubmedxml2txt(StringIO(_TXT_XML), passage_separator=' | '))
+    texts = [text for _, text in results]
     assert texts == ['A Test Title | An abstract sentence.']
 
 
-def test_pubmedxml2txt_include_metadata_prepends_header():
-    texts = list(pubmedxml2txt(StringIO(_TXT_XML), sections=('title',), include_metadata=True))
-    assert texts == ['pmid: 99\nyear: 2020\nmonth: 5\nday: 1\njournal: Journal of Testing\n\nA Test Title']
+def test_pubmedxml2txt_yields_metadata_alongside_text():
+    (meta, text), = list(pubmedxml2txt(StringIO(_TXT_XML), sections=('title',)))
+    assert isinstance(meta, PubMedMeta)
+    assert meta.pmid == '99'
+    assert meta.pub_year == 2020
+    assert meta.pub_month == 5
+    assert meta.pub_day == 1
+    assert meta.journal == 'Journal of Testing'
+    assert text == 'A Test Title'
+
+
+def test_pubmedxml2txt_has_no_include_metadata_param():
+    import inspect
+
+    assert 'include_metadata' not in inspect.signature(pubmedxml2txt).parameters
 
 
 def _pubmed_article_xml(inner: str) -> str:
@@ -414,9 +430,8 @@ def test_journal_title_missing_defaults_to_empty_string():
     assert docs[0].infons['journal'] == ''
 
 
-def test_pubmedxml2txt_include_metadata_omits_header_when_all_fields_empty():
-    # an empty <PMID> element has .text == None, same as every other optional field here,
-    # so the metadata header ends up fully empty and should be omitted entirely
+def test_pubmedxml2txt_metadata_fields_empty_when_absent_from_source():
+    # an empty <PMID> element has .text == None, same as every other optional field here
     xml = '''<PubmedArticle>
         <MedlineCitation>
             <PMID></PMID>
@@ -427,8 +442,10 @@ def test_pubmedxml2txt_include_metadata_omits_header_when_all_fields_empty():
         </MedlineCitation>
         <PubmedData><ArticleIdList></ArticleIdList></PubmedData>
     </PubmedArticle>'''
-    texts = list(pubmedxml2txt(StringIO(xml), sections=('title',), include_metadata=True))
-    assert texts == ['A Test Title']
+    (meta, text), = list(pubmedxml2txt(StringIO(xml), sections=('title',)))
+    assert meta.pmid is None
+    assert meta.pub_year is None
+    assert text == 'A Test Title'
 
 
 def test_pubmedxml2txt_drops_abstract_passage_left_empty_by_bracket_cleanup():
@@ -448,7 +465,8 @@ def test_pubmedxml2txt_drops_abstract_passage_left_empty_by_bracket_cleanup():
         </MedlineCitation>
         <PubmedData><ArticleIdList></ArticleIdList></PubmedData>
     </PubmedArticle>'''
-    texts = list(pubmedxml2txt(StringIO(xml), sections=('abstract',)))
+    results = list(pubmedxml2txt(StringIO(xml), sections=('abstract',)))
+    texts = [text for _, text in results]
     assert texts == ['Real content.']
 
 
@@ -487,9 +505,10 @@ def test_pubmedxml2txt_clear_empty_brackets_false_keeps_bracket_only_content():
         </MedlineCitation>
         <PubmedData><ArticleIdList></ArticleIdList></PubmedData>
     </PubmedArticle>'''
-    texts = list(
+    results = list(
         pubmedxml2txt(StringIO(xml), sections=('title', 'abstract'), clear_empty_brackets=False)
     )
+    texts = [text for _, text in results]
     assert texts == ['A Test Title ( )\n\nReal content ( ).']
 
 
@@ -515,16 +534,16 @@ _EXPONENTIAL_XML = '''<PubmedArticle>
 
 
 def test_fix_exponentials_true_converts_exponent_via_pubmedxml2txt():
-    texts = list(pubmedxml2txt(StringIO(_EXPONENTIAL_XML), sections=('abstract',), fix_exponentials=True))
-    text = texts[0]
+    results = list(pubmedxml2txt(StringIO(_EXPONENTIAL_XML), sections=('abstract',), fix_exponentials=True))
+    _, text = results[0]
     assert '3x10^8 m/s' in text
     assert '1st century' in text
     assert '14C dating' in text
 
 
 def test_fix_exponentials_false_leaves_exponent_glued_via_pubmedxml2txt():
-    texts = list(pubmedxml2txt(StringIO(_EXPONENTIAL_XML), sections=('abstract',), fix_exponentials=False))
-    text = texts[0]
+    results = list(pubmedxml2txt(StringIO(_EXPONENTIAL_XML), sections=('abstract',), fix_exponentials=False))
+    _, text = results[0]
     assert '3x108 m/s' in text
     assert '^' not in text
 
@@ -543,8 +562,16 @@ _TAGGED_XML = '''<PubmedArticle>
 
 
 def test_pubmedxml2tagged_keeps_markup():
-    texts = list(pubmedxml2tagged(StringIO(_TAGGED_XML)))
+    results = list(pubmedxml2tagged(StringIO(_TAGGED_XML)))
+    texts = [text for _, text in results]
     assert texts == ['The <i>ALK</i> gene\n\nSome <b>bold</b> &amp; <i>italic</i> text.']
+
+
+def test_pubmedxml2tagged_yields_metadata_alongside_text():
+    (meta, _), = list(pubmedxml2tagged(StringIO(_TAGGED_XML), sections=('title',)))
+    assert isinstance(meta, PubMedMeta)
+    assert meta.pmid == '99'
+    assert meta.pub_year == 2020
 
 
 def test_pubmedxml2tagged_keep_tags_defaults_to_pubmed_keep_tags():
@@ -556,17 +583,18 @@ def test_pubmedxml2tagged_keep_tags_defaults_to_pubmed_keep_tags():
 
 
 def test_pubmedxml2tagged_sections_filters_and_orders():
-    texts = list(pubmedxml2tagged(StringIO(_TAGGED_XML), sections=('abstract',)))
+    results = list(pubmedxml2tagged(StringIO(_TAGGED_XML), sections=('abstract',)))
+    texts = [text for _, text in results]
     assert texts == ['Some <b>bold</b> &amp; <i>italic</i> text.']
 
 
 def test_pubmedxml2tagged_fix_exponentials_keeps_sup_tag_rather_than_converting():
     # with return_xml=True the <sup> tag itself already conveys the exponent, so
     # fix_exponentials's textual "^N" conversion (return_xml=False only) never fires
-    texts = list(
+    results = list(
         pubmedxml2tagged(StringIO(_EXPONENTIAL_XML), sections=('abstract',), fix_exponentials=True)
     )
-    text = texts[0]
+    _, text = results[0]
     assert '<sup>8</sup>' in text
     assert '^' not in text
 
@@ -588,16 +616,16 @@ def test_dispformula_and_inline_mathml_are_blanked_from_abstract():
     # PUBMED_IGNORE_TAGS covers both a block formula wrapped in <DispFormula> and a bare
     # inline <mml:math> - see the namespace-expansion note on PUBMED_IGNORE_TAGS for why the
     # ignore set can't just contain the literal "mml:math" string
-    texts = list(pubmedxml2txt(StringIO(_MATH_XML), sections=('abstract',)))
-    text = texts[0]
+    results = list(pubmedxml2txt(StringIO(_MATH_XML), sections=('abstract',)))
+    _, text = results[0]
     assert 'ZZFORMULAZZ' not in text
     assert 'QQINLINEQQ' not in text
     assert text == 'Before after, and inline too.'
 
 
 def test_dispformula_and_inline_mathml_are_blanked_with_return_xml_true():
-    texts = list(pubmedxml2tagged(StringIO(_MATH_XML), sections=('abstract',)))
-    text = texts[0]
+    results = list(pubmedxml2tagged(StringIO(_MATH_XML), sections=('abstract',)))
+    _, text = results[0]
     assert 'ZZFORMULAZZ' not in text
     assert 'QQINLINEQQ' not in text
     assert 'DispFormula' not in text

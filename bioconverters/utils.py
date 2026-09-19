@@ -232,14 +232,6 @@ def _fix_exponentials(xml_string: str) -> str:
     return _EXPONENT_RE.sub(r"^\1", xml_string)
 
 
-def _format_metadata_header(fields: dict) -> str:
-    """
-    Render an ordered {label: value} mapping as "label: value" lines, one per field, skipping
-    any field whose value is empty/None so callers can pass a fixed field set unconditionally.
-    """
-    return "\n".join(f"{label}: {value}" for label, value in fields.items() if value)
-
-
 _TAG_RE = re.compile(r"<[^>]+>")
 
 
