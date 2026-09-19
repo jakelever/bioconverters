@@ -12,7 +12,7 @@ pip install bioconverters
 
 ## PubMed
 
-### `pubmedxml2txt` [[api]](https://jakelever.github.io/bioconverters/bioconverters.html#pubmedxml2txt) - plain text, one (metadata, text) pair per article
+### `pubmedxml2txt` [[api]](https://jakelever.github.io/bioconverters/bioconverters.html#pubmedxml2txt) - plain text with metadata
 
 ```python
 from bioconverters import pubmedxml2txt
@@ -33,9 +33,7 @@ for doc in pubmedxml2bioc('/path/to/medline.xml'):
     ...
 ```
 
-### `pubmedxml2tagged` [[api]](https://jakelever.github.io/bioconverters/bioconverters.html#pubmedxml2tagged) - marked-up text, one (metadata, text) pair per article
-
-Like `pubmedxml2txt`, but keeps formatting tags (`<i>`, `<b>`, `<u>`, `<sup>`, `<sub>`) inline instead of stripping them. A thin wrapper around `parse_pubmedxml` with `return_xml=True` and `keep_tags` defaulted to `pubmed_constants.PUBMED_KEEP_TAGS`.
+### `pubmedxml2tagged` [[api]](https://jakelever.github.io/bioconverters/bioconverters.html#pubmedxml2tagged) - text with formatting and citations
 
 ```python
 from bioconverters import pubmedxml2tagged
@@ -45,7 +43,7 @@ for meta, text in pubmedxml2tagged('/path/to/medline.xml'):
     ...
 ```
 
-### `parse_pubmedxml` [[api]](https://jakelever.github.io/bioconverters/bioconverters.html#parse_pubmedxml) - document objects for the complete details
+### `parse_pubmedxml` [[api]](https://jakelever.github.io/bioconverters/bioconverters.html#parse_pubmedxml) - full control over parsing
 
 This returns a `PubMedArticle` data structure with the various metadata and text fields. Check [the api](https://jakelever.github.io/bioconverters/bioconverters.html#PubMedArticle) for the full structure.
 
@@ -58,15 +56,9 @@ for article in parse_pubmedxml('/path/to/medline.xml'):
     ...
 ```
 
-`pubmedxml2txt`/`pubmedxml2tagged` already expose every metadata field (via `PubMedMeta`) alongside the text, so use `parse_pubmedxml` directly instead when you want the raw per-field structure - e.g. `abstract` as a list of passages rather than one joined string.
-
-Notable flags:
-- `return_xml` (default `False`) - return the title/abstract text as a marked-up XML string instead of plain text. Pair with `keep_tags` to control which tags survive, e.g. `"the <i>ALK</i> gene"`.
-- `keep_tags` - which tags' markup is preserved inline when `return_xml=True`. Use `pubmed_constants.PUBMED_KEEP_TAGS` for useful formatting tags (`<i>`, `<b>`, `<u>`, `<sup>`, `<sub>`).
-
 ## PMC
 
-### `pmcxml2txt` [[api]](https://jakelever.github.io/bioconverters/bioconverters.html#pmcxml2txt) - plain text, one (metadata, text) pair per article/sub-article
+### `pmcxml2txt` [[api]](https://jakelever.github.io/bioconverters/bioconverters.html#pmcxml2txt) - plain text with metadata
 
 ```python
 from bioconverters import pmcxml2txt
@@ -87,9 +79,7 @@ for doc in pmcxml2bioc('/path/to/pmc.xml'):
     ...
 ```
 
-### `pmcxml2tagged` [[api]](https://jakelever.github.io/bioconverters/bioconverters.html#pmcxml2tagged) - marked-up text with resolved citations, one (metadata, text) pair per article/sub-article
-
-Like `pmcxml2txt`, but keeps formatting tags (`<sup>`, `<italic>`, etc) inline and resolves in-text citations to `<citation pmid="...">` instead of dropping them. A thin wrapper around `parse_pmcxml` with `return_xml=True`, `keep_tags` defaulted to `pmc_constants.PMC_KEEP_TAGS`, and `inject_citations=True` (so `clean_numeric_citations`, which can't be combined with it, is forced off and isn't exposed as a parameter).
+### `pmcxml2tagged` [[api]](https://jakelever.github.io/bioconverters/bioconverters.html#pmcxml2tagged) - text with formatting and citations
 
 ```python
 from bioconverters import pmcxml2tagged
@@ -100,9 +90,7 @@ for meta, text in pmcxml2tagged('/path/to/pmc.xml'):
     ...
 ```
 
-### `parse_pmcxml` [[api]](https://jakelever.github.io/bioconverters/bioconverters.html#parse_pmcxml) - document objects with optional inline markup and citation control
-
-This returns a `PMCArticle` data structure with the various metadata and text fields. Check [the api](https://jakelever.github.io/bioconverters/bioconverters.html#PMCArticle) for the full structure.
+### `parse_pmcxml` [[api]](https://jakelever.github.io/bioconverters/bioconverters.html#parse_pmcxml) - full control over parsing
 
 ```python
 from bioconverters import parse_pmcxml
