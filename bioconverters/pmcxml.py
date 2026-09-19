@@ -37,12 +37,17 @@ def _extract_pmc_passages(
     clean_xrefs_in_brackets,
     clear_empty_brackets,
     fix_exponentials,
+    strip_tag_attributes,
 ):
     effective_keep_tags = keep_tags
     if inject_citations:
         effective_keep_tags = effective_keep_tags | {_CITATION_TAG}
     if fix_exponentials:
         effective_keep_tags = effective_keep_tags | {"sup"}
+    # Citation injection's own attributes (pmid/doi/count) always carry meaning that plain
+    # markup can't express, so they survive even when strip_tag_attributes strips every other
+    # kept tag's (source-XML) attributes.
+    preserve_attrib_tags = effective_keep_tags if not strip_tag_attributes else {_CITATION_TAG}
     return _extract_passages(
         elements,
         PMC_IGNORE_TAGS,
@@ -54,7 +59,7 @@ def _extract_pmc_passages(
         clean_xrefs_in_brackets,
         clear_empty_brackets,
         fix_exponentials,
-        preserve_attrib_tags={_CITATION_TAG},
+        preserve_attrib_tags=preserve_attrib_tags,
     )
 
 
@@ -114,6 +119,7 @@ def _extract_article_content(
     clean_xrefs_in_brackets,
     clear_empty_brackets,
     fix_exponentials,
+    strip_tag_attributes,
 ) -> _PmcContentFields:
     """
     Given the XML element representing the top-level of the scientific article, extract all the text sources
@@ -139,6 +145,7 @@ def _extract_article_content(
             clean_xrefs_in_brackets,
             clear_empty_brackets,
             fix_exponentials,
+            strip_tag_attributes,
         )
     )
     subtitle_text = " ".join(
@@ -153,6 +160,7 @@ def _extract_article_content(
             clean_xrefs_in_brackets,
             clear_empty_brackets,
             fix_exponentials,
+            strip_tag_attributes,
         )
     )
 
@@ -175,6 +183,7 @@ def _extract_article_content(
                 clean_xrefs_in_brackets,
                 clear_empty_brackets,
                 fix_exponentials,
+                strip_tag_attributes,
             )
         ),
         # Extract the full text from the paper as well as supplementaries and floating blocks of text
@@ -189,6 +198,7 @@ def _extract_article_content(
                 clean_xrefs_in_brackets,
                 clear_empty_brackets,
                 fix_exponentials,
+                strip_tag_attributes,
             )
         ),
         "back": list(
@@ -202,6 +212,7 @@ def _extract_article_content(
                 clean_xrefs_in_brackets,
                 clear_empty_brackets,
                 fix_exponentials,
+                strip_tag_attributes,
             )
         ),
         "floating": list(
@@ -215,6 +226,7 @@ def _extract_article_content(
                 clean_xrefs_in_brackets,
                 clear_empty_brackets,
                 fix_exponentials,
+                strip_tag_attributes,
             )
         ),
     }
@@ -294,6 +306,7 @@ def _get_meta_info_for_pmc_article(article_elem) -> _PMCMeta:
             clean_xrefs_in_brackets=False,
             clear_empty_brackets=False,
             fix_exponentials=False,
+            strip_tag_attributes=True,  # irrelevant here: return_xml=False strips all markup anyway
         )
     )
 
@@ -351,6 +364,7 @@ def parse_pmcxml(
     clean_xrefs_in_brackets: bool = True,
     clear_empty_brackets: bool = True,
     fix_exponentials: bool = True,
+    strip_tag_attributes: bool = True,
 ) -> Iterable[PMCArticle]:
     """
     Parse a PMC XML file into a series of PMCArticle objects (one per article/sub-article).
@@ -380,6 +394,12 @@ def parse_pmcxml(
         fix_exponentials: with return_xml=False, recover a digit-preceded numeric `<sup>`
             as "^N" instead of losing it to plain concatenation, e.g. `"10<sup>8</sup>"` ->
             "10^8".
+        strip_tag_attributes: with return_xml=True, strip source-XML attributes (e.g. the
+            "toggle" in `<italic toggle="yes">`) from every kept tag, since they're clutter
+            with no meaning to callers - has no effect when return_xml=False, since markup is
+            stripped entirely then. Citation injection's own attributes (pmid/doi/count) are
+            always kept regardless of this flag, since they carry meaning that plain markup
+            can't express.
 
     These defaults match pmcxml2bioc/pmcxml2txt, so behavior is consistent regardless of
     which entry point is used.
@@ -434,6 +454,7 @@ def parse_pmcxml(
                     clean_xrefs_in_brackets,
                     clear_empty_brackets,
                     fix_exponentials,
+                    strip_tag_attributes,
                 )
 
                 yield PMCArticle(

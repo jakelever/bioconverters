@@ -86,6 +86,7 @@ Notable flags:
 - `keep_tags` - which tags' markup is preserved inline when `return_xml=True`. Use `pmc_constants.PMC_KEEP_TAGS` for useful formatting tags (`<sup>`, `<sub>`, `<italic>`, etc).
 - `inject_citations` (default `False`) - resolve each in-text citation's `pmid`/`doi` and retag it to `<citation pmid="...">1</citation>`, kept in the output instead of dropped. Can't be combined with `clean_numeric_citations`.
 - `clean_numeric_citations`, `clean_xrefs_in_brackets`, `clear_empty_brackets` (all default `True`) - see "Cleaning up text" below.
+- `strip_tag_attributes` (default `True`) - with `return_xml=True`, strip source-XML attributes (e.g. the `toggle` in `<italic toggle="yes">`) from every kept tag, since they're clutter with no meaning to callers. Attributes added by `inject_citations` (`pmid`/`doi`/`count`) are always kept regardless of this flag.
 
 ## Details on text extraction
 
@@ -143,6 +144,8 @@ There are two options:
 
 1. If you want plain text, tags are stripped automatically. But the `fix_exponentials` flag (default `True`) tries to spot cases where an exponential can be nicely cleaned up (e.g. to `"3x10^8 m/s"`).
 2. Work with a modified XML format that keeps some of the formatting tags, by passing `return_xml=True` to `parse_pmcxml`. Which tags survive is controlled by `keep_tags`, which defaults to the `pmc_constants.PMC_KEEP_TAGS` list of tags. This list includes `<sup>`, `<sub>` and others.
+
+Kept tags have their source-XML attributes stripped by default (e.g. `<italic toggle="yes">` becomes `<italic>`), since they're clutter with no meaning outside the source document. Pass `strip_tag_attributes=False` to keep them as-is.
 
 ## Getting citation info with `inject_citations`
 
