@@ -15,8 +15,8 @@ class PMCMeta:
     pmid: Optional[str]
     """PubMed ID, or None if this article isn't linked to one (e.g. not PubMed-indexed)."""
 
-    doi: str
-    """DOI, or an empty string if not found."""
+    doi: Optional[str]
+    """DOI, or None if this article doesn't have one registered."""
 
     pub_year: Optional[str]
     """Publication year, or None if not found."""
@@ -49,8 +49,8 @@ class PMCArticle(PMCMeta):
     pmid: Optional[str]
     """PubMed ID, or None if this article isn't linked to one (e.g. not PubMed-indexed)."""
 
-    doi: str
-    """DOI, or an empty string if not found."""
+    doi: Optional[str]
+    """DOI, or None if this article doesn't have one registered."""
 
     pub_year: Optional[str]
     """Publication year, or None if not found."""

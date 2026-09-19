@@ -635,6 +635,6 @@ def test_pmcxml2txt_metadata_fields_empty_when_absent_from_source():
     (meta, text), = list(pmcxml2txt(StringIO(_NO_METADATA_XML), sections=('article',)))
     assert meta.pmid is None
     assert meta.pmcid == ''
-    assert meta.doi == ''
+    assert meta.doi is None
     assert meta.pub_year is None
     assert text == 'Just some text.'

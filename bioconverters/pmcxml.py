@@ -253,12 +253,13 @@ def _get_meta_info_for_pmc_article(article_elem) -> PMCMeta:
             pub_id_type = "pmcid"
         id_map[pub_id_type] = a.text.strip().replace("\n", " ")
 
-    # pmid, unlike pmcid/doi, has no empty-string sentinel: not every PMC article is linked to
-    # a PubMed record (e.g. preprints deposited directly to PMC), so None distinguishes "no
-    # link exists" from a genuinely empty id - id_map.get's own None default already does this.
+    # pmid/doi, unlike pmcid, have no empty-string sentinel: not every PMC article is linked to
+    # a PubMed record or has a DOI registered (e.g. preprints deposited directly to PMC), so
+    # None distinguishes "no link/id exists" from a genuinely empty one - id_map.get's own
+    # None default already does this.
     pmid_text = id_map.get("pmid")
     pmcid_text = id_map.get("pmcid", "")
-    doi_text = id_map.get("doi", "")
+    doi_text = id_map.get("doi")
 
     # Attempt to get the publication date, preferring whichever pub-date element is most complete
     pubdates = article_elem.findall("./front/article-meta/pub-date") + article_elem.findall(
