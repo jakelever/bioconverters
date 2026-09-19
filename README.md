@@ -12,6 +12,8 @@ pip install bioconverters
 
 ## PubMed
 
+You can get the titles and abstracts from PubMed files with the functions below:
+
 ### `pubmedxml2txt` [[api]](https://jakelever.github.io/bioconverters/bioconverters.html#pubmedxml2txt) - plain text with metadata
 
 ```python
@@ -56,7 +58,9 @@ for article in parse_pubmedxml('/path/to/medline.xml'):
     ...
 ```
 
-## PMC
+## PubMed Central XML
+
+You can get the full text cleanly from PMC files with the functions below:
 
 ### `pmcxml2txt` [[api]](https://jakelever.github.io/bioconverters/bioconverters.html#pmcxml2txt) - plain text with metadata
 
@@ -109,13 +113,11 @@ Notable flags:
 
 ## Fetching XML from NCBI with eutils
 
-If you don't already have a PMC/MEDLINE XML file on disk, NCBI's [eutils](https://www.ncbi.nlm.nih.gov/books/NBK25501/) `efetch` endpoint can fetch one directly by ID. This needs `requests` (`pip install requests` - not one of this package's own dependencies):
+If you don't already have a PMC/MEDLINE XML file on disk, NCBI's [eutils](https://www.ncbi.nlm.nih.gov/books/NBK25501/) `efetch` endpoint can fetch one directly by ID. This needs `requests` (`pip install requests`):
 
 ```python
 from io import StringIO
-
 import requests
-
 from bioconverters import pmcxml2txt
 
 response = requests.get(
@@ -128,7 +130,7 @@ for meta, text in pmcxml2txt(StringIO(response.text)):
     ...
 ```
 
-Swap `db='pmc'`/a PMCID for `db='pubmed'`/a PMID to fetch MEDLINE XML for `parse_pubmedxml`/`pubmedxml2txt`/`pubmedxml2tagged` instead. `response.text` needs wrapping in a `StringIO` either way - a bare string is treated as a file path, not literal XML content. See the [eutils docs](https://www.ncbi.nlm.nih.gov/books/NBK25497/) for request-rate limits and the optional `api_key` parameter for higher ones.
+Swap `db='pmc'`/a PMCID for `db='pubmed'`/a PMID to fetch MEDLINE XML for `parse_pubmedxml`/`pubmedxml2txt`/`pubmedxml2tagged` instead. See the [eutils docs](https://www.ncbi.nlm.nih.gov/books/NBK25497/) for request-rate limits and the optional `api_key` parameter for higher ones.
 
 ## Details on text extraction
 
