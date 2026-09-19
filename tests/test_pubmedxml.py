@@ -571,6 +571,39 @@ def test_pubmedxml2tagged_fix_exponentials_keeps_sup_tag_rather_than_converting(
     assert '^' not in text
 
 
+_MATH_XML = '''<PubmedArticle xmlns:mml="http://www.w3.org/1998/Math/MathML">
+    <MedlineCitation>
+        <PMID>77</PMID>
+        <Article>
+            <Journal><JournalIssue><PubDate><Year>2020</Year></PubDate></JournalIssue></Journal>
+            <ArticleTitle>A Math Title</ArticleTitle>
+            <Abstract><AbstractText>Before <DispFormula><mml:math><mml:mi>ZZFORMULAZZ</mml:mi></mml:math></DispFormula> after, and inline <mml:math><mml:mi>QQINLINEQQ</mml:mi></mml:math> too.</AbstractText></Abstract>
+        </Article>
+    </MedlineCitation>
+    <PubmedData><ArticleIdList></ArticleIdList></PubmedData>
+</PubmedArticle>'''
+
+
+def test_dispformula_and_inline_mathml_are_blanked_from_abstract():
+    # PUBMED_IGNORE_TAGS covers both a block formula wrapped in <DispFormula> and a bare
+    # inline <mml:math> - see the namespace-expansion note on PUBMED_IGNORE_TAGS for why the
+    # ignore set can't just contain the literal "mml:math" string
+    texts = list(pubmedxml2txt(StringIO(_MATH_XML), sections=('abstract',)))
+    text = texts[0]
+    assert 'ZZFORMULAZZ' not in text
+    assert 'QQINLINEQQ' not in text
+    assert text == 'Before after, and inline too.'
+
+
+def test_dispformula_and_inline_mathml_are_blanked_with_return_xml_true():
+    texts = list(pubmedxml2tagged(StringIO(_MATH_XML), sections=('abstract',)))
+    text = texts[0]
+    assert 'ZZFORMULAZZ' not in text
+    assert 'QQINLINEQQ' not in text
+    assert 'DispFormula' not in text
+    assert 'mml' not in text
+
+
 def test_return_xml_true_does_not_unescape_entities():
     # html.unescape must be skipped for return_xml=True output - unescaping "&amp;" back to a
     # bare "&" would leave the returned markup not safely re-parseable as XML
