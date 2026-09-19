@@ -2,7 +2,7 @@ from io import StringIO
 
 import pytest
 
-from bioconverters import parse_pmcxml, pmcxml2bioc, pmcxml2txt
+from bioconverters import parse_pmcxml, pmcxml2bioc, pmcxml2tagged, pmcxml2txt
 from bioconverters.pmcxml import _apply_pmc_xlink_fix
 
 from .util import fetch_xml
@@ -356,6 +356,57 @@ def test_fix_exponentials_false_leaves_exponent_glued_via_pmcxml2txt():
     text = texts[0]
     assert '3x108 m/s' in text
     assert '^' not in text
+
+
+_TAGGED_XML = '''<article>
+    <front><article-meta><article-id pub-id-type="pmid">1</article-id>
+    <title-group><article-title>the <italic toggle="yes">ABC1</italic> gene</article-title></title-group>
+    </article-meta></front>
+    <body><p>the <italic toggle="yes">ABC1</italic> protein <xref ref-type="bibr" rid="r1">1</xref> is active.</p></body>
+    <back><ref-list>
+        <ref id="r1"><element-citation><pub-id pub-id-type="pmid">111</pub-id></element-citation></ref>
+    </ref-list></back>
+</article>'''
+
+
+def test_pmcxml2tagged_keeps_markup_citations_and_strips_source_attributes():
+    texts = list(pmcxml2tagged(StringIO(_TAGGED_XML), sections=('title', 'article')))
+    text = texts[0]
+
+    # formatting tags are kept, but their source-XML attributes (toggle) are stripped
+    assert '<italic>ABC1</italic>' in text
+    assert 'toggle' not in text
+    # the in-text citation is resolved and kept, with its injected pmid attribute
+    assert '<citation' in text
+    assert 'pmid="111"' in text
+    # numeric citation cleanup can't run alongside injection, so nothing eats the marker first
+    assert 'xref' not in text
+
+
+def test_pmcxml2tagged_strip_tag_attributes_false_keeps_source_attributes():
+    texts = list(
+        pmcxml2tagged(StringIO(_TAGGED_XML), sections=('article',), strip_tag_attributes=False)
+    )
+    assert '<italic toggle="yes">ABC1</italic>' in texts[0]
+
+
+def test_pmcxml2tagged_keep_tags_defaults_to_pmc_keep_tags():
+    import inspect
+
+    from bioconverters.pmc_constants import PMC_KEEP_TAGS
+
+    assert inspect.signature(pmcxml2tagged).parameters['keep_tags'].default == PMC_KEEP_TAGS
+
+
+def test_pmcxml2tagged_has_no_inject_citations_or_clean_numeric_citations_params():
+    # both are forced (inject_citations=True, clean_numeric_citations=False) since the whole
+    # point of this wrapper is resolved, kept citations - exposing either would let a caller
+    # recreate the combination parse_pmcxml explicitly rejects
+    import inspect
+
+    params = inspect.signature(pmcxml2tagged).parameters
+    assert 'inject_citations' not in params
+    assert 'clean_numeric_citations' not in params
 
 
 _MALFORMED_ARTICLE_ID_XML = '''<article>

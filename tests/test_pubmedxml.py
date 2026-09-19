@@ -10,6 +10,7 @@ from bioconverters import (
     SupplementaryMeshConcept,
     parse_pubmedxml,
     pubmedxml2bioc,
+    pubmedxml2tagged,
     pubmedxml2txt,
 )
 
@@ -526,3 +527,52 @@ def test_fix_exponentials_false_leaves_exponent_glued_via_pubmedxml2txt():
     text = texts[0]
     assert '3x108 m/s' in text
     assert '^' not in text
+
+
+_TAGGED_XML = '''<PubmedArticle>
+    <MedlineCitation>
+        <PMID>99</PMID>
+        <Article>
+            <Journal><JournalIssue><PubDate><Year>2020</Year></PubDate></JournalIssue></Journal>
+            <ArticleTitle>The <i>ALK</i> gene</ArticleTitle>
+            <Abstract><AbstractText>Some <b>bold</b> &amp; <i>italic</i> text.</AbstractText></Abstract>
+        </Article>
+    </MedlineCitation>
+    <PubmedData><ArticleIdList></ArticleIdList></PubmedData>
+</PubmedArticle>'''
+
+
+def test_pubmedxml2tagged_keeps_markup():
+    texts = list(pubmedxml2tagged(StringIO(_TAGGED_XML)))
+    assert texts == ['The <i>ALK</i> gene\n\nSome <b>bold</b> &amp; <i>italic</i> text.']
+
+
+def test_pubmedxml2tagged_keep_tags_defaults_to_pubmed_keep_tags():
+    import inspect
+
+    from bioconverters.pubmed_constants import PUBMED_KEEP_TAGS
+
+    assert inspect.signature(pubmedxml2tagged).parameters['keep_tags'].default == PUBMED_KEEP_TAGS
+
+
+def test_pubmedxml2tagged_sections_filters_and_orders():
+    texts = list(pubmedxml2tagged(StringIO(_TAGGED_XML), sections=('abstract',)))
+    assert texts == ['Some <b>bold</b> &amp; <i>italic</i> text.']
+
+
+def test_pubmedxml2tagged_fix_exponentials_keeps_sup_tag_rather_than_converting():
+    # with return_xml=True the <sup> tag itself already conveys the exponent, so
+    # fix_exponentials's textual "^N" conversion (return_xml=False only) never fires
+    texts = list(
+        pubmedxml2tagged(StringIO(_EXPONENTIAL_XML), sections=('abstract',), fix_exponentials=True)
+    )
+    text = texts[0]
+    assert '<sup>8</sup>' in text
+    assert '^' not in text
+
+
+def test_return_xml_true_does_not_unescape_entities():
+    # html.unescape must be skipped for return_xml=True output - unescaping "&amp;" back to a
+    # bare "&" would leave the returned markup not safely re-parseable as XML
+    docs = list(parse_pubmedxml(StringIO(_TAGGED_XML), return_xml=True, keep_tags={'i', 'b'}))
+    assert '&amp;' in docs[0].abstract[0]

@@ -2,7 +2,7 @@
 
 [![PyPi](https://img.shields.io/pypi/v/bioconverters.svg)](https://pypi.org/project/bioconverters/) [![License](https://img.shields.io/pypi/l/bioconverters.svg)](https://www.tldrlegal.com/license/mit-license) [![build](https://github.com/jakelever/bioconverters/actions/workflows/tests.yml/badge.svg)](https://github.com/jakelever/bioconverters/actions) [![codecov](https://codecov.io/gh/jakelever/bioconverters/branch/master/graph/badge.svg)](https://codecov.io/gh/jakelever/bioconverters) [![docs](https://img.shields.io/github/deployments/jakelever/bioconverters/github-pages?label=docs)](https://jakelever.github.io/bioconverters/)
 
-The bioconverters package converts PubMed and PMC XML into plain text or BioC format.
+The bioconverters package converts PubMed and PMC XML into plain text, marked-up text, or BioC format.
 
 ## Install
 
@@ -32,6 +32,18 @@ for doc in pubmedxml2bioc('/path/to/medline.xml'):
     ...
 ```
 
+### `pubmedxml2tagged` [[api]](https://jakelever.github.io/bioconverters/bioconverters.html#pubmedxml2tagged) - marked-up text, one string per article
+
+Like `pubmedxml2txt`, but keeps formatting tags (`<i>`, `<b>`, `<u>`, `<sup>`, `<sub>`) inline instead of stripping them. A thin wrapper around `parse_pubmedxml` with `return_xml=True` and `keep_tags` defaulted to `pubmed_constants.PUBMED_KEEP_TAGS`.
+
+```python
+from bioconverters import pubmedxml2tagged
+
+for text in pubmedxml2tagged('/path/to/medline.xml'):
+    # text is a single string, e.g. "The <i>ALK</i> gene\n\nAn abstract with <sup>14</sup>C..."
+    ...
+```
+
 ### `parse_pubmedxml` [[api]](https://jakelever.github.io/bioconverters/bioconverters.html#parse_pubmedxml) - document objects for the complete details
 
 This returns a `PubMedArticle` data structure with the various metadata and text fields. Check [the api](https://jakelever.github.io/bioconverters/bioconverters.html#PubMedArticle) for the full structure.
@@ -46,6 +58,10 @@ for article in parse_pubmedxml('/path/to/medline.xml'):
 ```
 
 Use this if you need fields `pubmedxml2txt`/`pubmedxml2bioc` don't expose, like authors, MeSH headings or chemicals.
+
+Notable flags:
+- `return_xml` (default `False`) - return the title/abstract text as a marked-up XML string instead of plain text. Pair with `keep_tags` to control which tags survive, e.g. `"the <i>ALK</i> gene"`.
+- `keep_tags` - which tags' markup is preserved inline when `return_xml=True`. Use `pubmed_constants.PUBMED_KEEP_TAGS` for useful formatting tags (`<i>`, `<b>`, `<u>`, `<sup>`, `<sub>`).
 
 ## PMC
 
@@ -66,6 +82,19 @@ from bioconverters import pmcxml2bioc
 
 for doc in pmcxml2bioc('/path/to/pmc.xml'):
     # doc is a bioc.BioCDocument, with one passage per paragraph/section
+    ...
+```
+
+### `pmcxml2tagged` [[api]](https://jakelever.github.io/bioconverters/bioconverters.html#pmcxml2tagged) - marked-up text with resolved citations, one string per article/sub-article
+
+Like `pmcxml2txt`, but keeps formatting tags (`<sup>`, `<italic>`, etc) inline and resolves in-text citations to `<citation pmid="...">` instead of dropping them. A thin wrapper around `parse_pmcxml` with `return_xml=True`, `keep_tags` defaulted to `pmc_constants.PMC_KEEP_TAGS`, and `inject_citations=True` (so `clean_numeric_citations`, which can't be combined with it, is forced off and isn't exposed as a parameter).
+
+```python
+from bioconverters import pmcxml2tagged
+
+for text in pmcxml2tagged('/path/to/pmc.xml', include_metadata=True):
+    # text is a single string with markup and citations kept, e.g.
+    # "pmid: 123\n\nTitle\n\nActive in <italic>ABC1</italic> <citation pmid=\"111\">1</citation>..."
     ...
 ```
 

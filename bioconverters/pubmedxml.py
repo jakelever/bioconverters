@@ -133,18 +133,28 @@ _doi_regex = re.compile(r"^[0-9\.]+\/.+[^\/]$")
 
 def parse_pubmedxml(
     source: Union[str, TextIO],
+    return_xml: bool = False,
+    keep_tags=set(),
     clear_empty_brackets: bool = True,
     fix_exponentials: bool = True,
 ) -> Iterable[PubMedArticle]:
     """
     Args:
         source: path to the MEDLINE xml file
+        return_xml: return the title/abstract text as a marked-up XML string if True, or as
+            plain, unescaped text with any markup stripped if False (default).
+        keep_tags: with return_xml=True, tags whose markup is preserved inline (e.g. "i",
+            "b", "sup") - has no effect when return_xml=False. Defaults to an empty set (no
+            markup kept). Pass `pubmed_constants.PUBMED_KEEP_TAGS` for the common formatting
+            tags (i, b, u, sup, sub).
         clear_empty_brackets: remove any "(...)"/"[...]"/"{...}" left containing no word
             characters.
         fix_exponentials: recover a digit-preceded numeric `<sup>` as "^N" instead of losing
             it to plain concatenation, e.g. `"10<sup>8</sup>"` -> "10^8". Same default as
-            pubmedxml2txt/pubmedxml2bioc.
+            pubmedxml2txt/pubmedxml2bioc. Requires "sup" to be preserved, which happens
+            automatically regardless of keep_tags.
     """
+    effective_keep_tags = keep_tags | {"sup"} if fix_exponentials else keep_tags
     for event, elem in etree.iterparse(source, events=("start", "end", "start-ns", "end-ns")):
         if event == "end" and elem.tag == "PubmedArticle":  # MedlineCitation'):
             # Try to extract the pmid_id
@@ -269,13 +279,17 @@ def parse_pubmedxml(
                 title,
                 PUBMED_IGNORE_TAGS,
                 PUBMED_SPLIT_TAGS,
-                PUBMED_KEEP_TAGS,
-                return_xml=False,
+                effective_keep_tags,
+                return_xml=return_xml,
                 trim_buggy_sentences=True,
                 fix_exponentials=fix_exponentials,
             )
             title_text = _remove_brackets_from_titles(title_passages[0])
-            title_text = html.unescape(title_text)
+            if not return_xml:
+                # html.unescape catches named entities (e.g. &alpha;) that XML unescaping
+                # alone doesn't - only safe on plain text, since unescaping "&amp;" etc. back
+                # to "&" inside return_xml=True's own markup would corrupt it
+                title_text = html.unescape(title_text)
             if clear_empty_brackets:
                 title_text = _remove_brackets_without_words(title_text)
 
@@ -285,12 +299,14 @@ def parse_pubmedxml(
                 abstract,
                 PUBMED_IGNORE_TAGS,
                 PUBMED_SPLIT_TAGS,
-                PUBMED_KEEP_TAGS,
-                return_xml=False,
+                effective_keep_tags,
+                return_xml=return_xml,
                 trim_buggy_sentences=True,
                 fix_exponentials=fix_exponentials,
             )
-            abstract_text = [html.unescape(t) for t in abstract_passages]
+            abstract_text = (
+                abstract_passages if return_xml else [html.unescape(t) for t in abstract_passages]
+            )
             if clear_empty_brackets:
                 abstract_text = [_remove_brackets_without_words(t) for t in abstract_text]
 
@@ -432,6 +448,64 @@ def pubmedxml2txt(
     """
     for pm_doc in parse_pubmedxml(
         source, clear_empty_brackets=clear_empty_brackets, fix_exponentials=fix_exponentials
+    ):
+        parts = []
+        if include_metadata:
+            header = _format_metadata_header(
+                {
+                    "pmid": pm_doc.pmid,
+                    "pmcid": pm_doc.pmcid,
+                    "doi": pm_doc.doi,
+                    "year": pm_doc.pub_year,
+                    "month": pm_doc.pub_month,
+                    "day": pm_doc.pub_day,
+                    "journal": pm_doc.journal,
+                    "authors": "; ".join(pm_doc.authors) if pm_doc.authors else None,
+                }
+            )
+            if header:
+                parts.append(header)
+
+        parts.extend(pm_doc.iter_text(sections))
+
+        yield passage_separator.join(parts)
+
+
+def pubmedxml2tagged(
+    source: Union[str, TextIO],
+    sections: Iterable[str] = ("title", "abstract"),
+    include_metadata: bool = False,
+    passage_separator: str = "\n\n",
+    keep_tags=PUBMED_KEEP_TAGS,
+    clear_empty_brackets: bool = True,
+    fix_exponentials: bool = True,
+) -> Iterator[str]:
+    """
+    Convert a MEDLINE XML file into marked-up text, one string per article, with formatting
+    tags (e.g. "<i>", "<sup>") kept inline instead of stripped. A thin wrapper around
+    parse_pubmedxml with return_xml=True and keep_tags defaulted to PUBMED_KEEP_TAGS.
+
+    Args:
+        source: path to the MEDLINE xml file
+        sections: which of "title"/"abstract" to include, and in what order.
+        include_metadata: prepend a "label: value" header block (pmid, pmcid, doi, year,
+            month, day, journal, authors) before the text, separated by passage_separator
+            like any other passage. Fields that are empty/missing are omitted.
+        passage_separator: string used to join the header (if any), and every extracted
+            passage, into the single returned string.
+        keep_tags: see parse_pubmedxml. Defaults to `pubmed_constants.PUBMED_KEEP_TAGS`.
+        clear_empty_brackets: see parse_pubmedxml.
+        fix_exponentials: see parse_pubmedxml.
+
+    Returns:
+        An iterator over one marked-up text string per article
+    """
+    for pm_doc in parse_pubmedxml(
+        source,
+        return_xml=True,
+        keep_tags=keep_tags,
+        clear_empty_brackets=clear_empty_brackets,
+        fix_exponentials=fix_exponentials,
     ):
         parts = []
         if include_metadata:

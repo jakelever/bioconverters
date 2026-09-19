@@ -6,7 +6,7 @@ from typing import Iterable, Iterator, TextIO, TypedDict, Union
 
 import bioc
 
-from .pmc_constants import PMC_IGNORE_TAGS, PMC_SPLIT_TAGS
+from .pmc_constants import PMC_IGNORE_TAGS, PMC_KEEP_TAGS, PMC_SPLIT_TAGS
 from .pmc_types import PMCArticle, _PMCMeta
 from .utils import _extract_passages, _format_metadata_header, _remove_brackets_from_titles
 
@@ -592,6 +592,78 @@ def pmcxml2txt(
         clean_xrefs_in_brackets=clean_xrefs_in_brackets,
         clear_empty_brackets=clear_empty_brackets,
         fix_exponentials=fix_exponentials,
+    ):
+        parts = []
+        if include_metadata:
+            header = _format_metadata_header(
+                {
+                    "pmid": doc.pmid,
+                    "pmcid": doc.pmcid,
+                    "doi": doc.doi,
+                    "year": doc.pub_year,
+                    "month": doc.pub_month,
+                    "day": doc.pub_day,
+                    "journal": doc.journal,
+                }
+            )
+            if header:
+                parts.append(header)
+
+        parts.extend(doc.iter_text(sections))
+
+        yield passage_separator.join(parts)
+
+
+def pmcxml2tagged(
+    source: Union[str, TextIO],
+    sections: Iterable[str] = ("title", "subtitle", "abstract", "article", "back", "floating"),
+    include_metadata: bool = False,
+    passage_separator: str = "\n\n",
+    keep_tags=PMC_KEEP_TAGS,
+    trim_buggy_sentences: bool = True,
+    clean_xrefs_in_brackets: bool = True,
+    clear_empty_brackets: bool = True,
+    fix_exponentials: bool = True,
+    strip_tag_attributes: bool = True,
+) -> Iterator[str]:
+    """
+    Convert a PMC XML file into marked-up text, one string per article/sub-article, with
+    formatting tags (e.g. "<sup>", "<italic>") kept inline and in-text citations resolved and
+    kept as "<citation pmid=\"...\">" instead of stripped. A thin wrapper around parse_pmcxml
+    with return_xml=True, keep_tags defaulted to PMC_KEEP_TAGS, and inject_citations=True (so
+    clean_numeric_citations, which can't be combined with it, is forced off).
+
+    Args:
+        source: The text or file handle containing the PMC XML
+        sections: which of the six PMCArticle text fields ("title", "subtitle", "abstract",
+            "article", "back", "floating") to include, and in what order.
+        include_metadata: prepend a "label: value" header block (pmid, pmcid, doi, year,
+            month, day, journal) before the text, separated by passage_separator like any
+            other passage. Fields that are empty/missing are omitted.
+        passage_separator: string used to join the header (if any), and every extracted
+            passage, into the single returned string.
+        keep_tags: see parse_pmcxml. Defaults to `pmc_constants.PMC_KEEP_TAGS`.
+        trim_buggy_sentences: trim overly long, unbroken runs of text to a maximum length,
+            to avoid issues with buggy sentences in some PMC articles.
+        clean_xrefs_in_brackets: see parse_pmcxml.
+        clear_empty_brackets: see parse_pmcxml.
+        fix_exponentials: see parse_pmcxml.
+        strip_tag_attributes: see parse_pmcxml.
+
+    Returns:
+        An iterator over one marked-up text string per article/sub-article
+    """
+    for doc in parse_pmcxml(
+        source,
+        keep_tags=keep_tags,
+        return_xml=True,
+        trim_buggy_sentences=trim_buggy_sentences,
+        inject_citations=True,
+        clean_numeric_citations=False,
+        clean_xrefs_in_brackets=clean_xrefs_in_brackets,
+        clear_empty_brackets=clear_empty_brackets,
+        fix_exponentials=fix_exponentials,
+        strip_tag_attributes=strip_tag_attributes,
     ):
         parts = []
         if include_metadata:
