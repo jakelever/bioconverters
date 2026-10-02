@@ -284,7 +284,7 @@ def parse_pubmedxml(
                 trim_buggy_sentences=True,
                 fix_exponentials=fix_exponentials,
             )
-            title_text = _remove_brackets_from_titles(title_passages[0])
+            title_text = _remove_brackets_from_titles(title_passages[0]) if title_passages else ""
             if not return_xml:
                 # html.unescape catches named entities (e.g. &alpha;) that XML unescaping
                 # alone doesn't - only safe on plain text, since unescaping "&amp;" etc. back

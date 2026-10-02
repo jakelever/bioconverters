@@ -27,7 +27,7 @@ def _remove_brackets_without_words(text: str) -> str:
 # This removes the brackets while retaining the full stop
 def _remove_brackets_from_titles(title_text: str) -> str:
     title_text = title_text.strip()
-    if title_text[0] == "[" and title_text[-2:] == "].":
+    if title_text.startswith("[") and title_text[-2:] == "].":
         title_text = title_text[1:-2] + "."
     return title_text
 

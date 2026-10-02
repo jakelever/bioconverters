@@ -666,3 +666,24 @@ def test_return_xml_true_does_not_unescape_entities():
     # bare "&" would leave the returned markup not safely re-parseable as XML
     docs = list(parse_pubmedxml(StringIO(_TAGGED_XML), return_xml=True, keep_tags={'i', 'b'}))
     assert '&amp;' in docs[0].abstract[0]
+
+
+@pytest.mark.parametrize('title_xml', ['<ArticleTitle/>', '<ArticleTitle>   </ArticleTitle>'])
+def test_article_with_empty_title_does_not_crash(title_xml):
+    # some PubMed records have an empty ArticleTitle element; they should convert with an
+    # empty title rather than raising
+    xml = f'''<PubmedArticle>
+        <MedlineCitation>
+            <PMID>99</PMID>
+            <Article>
+                <Journal><JournalIssue><PubDate><Year>2020</Year></PubDate></JournalIssue></Journal>
+                {title_xml}
+                <Abstract><AbstractText>Some abstract text.</AbstractText></Abstract>
+            </Article>
+        </MedlineCitation>
+        <PubmedData><ArticleIdList></ArticleIdList></PubmedData>
+    </PubmedArticle>'''
+    parsed = list(parse_pubmedxml(StringIO(xml)))
+    assert parsed[0].title == ''
+    assert parsed[0].abstract == ['Some abstract text.']
+    assert list(pubmedxml2bioc(StringIO(xml)))[0].infons['title'] == ''
