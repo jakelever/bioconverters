@@ -5,12 +5,12 @@ import pytest
 from bioconverters import PMCMeta, parse_pmcxml, pmcxml2bioc, pmcxml2tagged, pmcxml2txt
 from bioconverters.pmcxml import _apply_pmc_xlink_fix
 
-from .util import fetch_xml
+from .util import load_xml
 
 
 @pytest.fixture(scope='module')
 def table_article():
-    article = fetch_xml('PMC3203921', 'pmc')  # has a table to be processed in it
+    article = load_xml('PMC3203921')  # has a table to be processed in it
     return article
 
 
@@ -19,13 +19,13 @@ def formula_article():
     # has MathML formulas (<mml:math>), each wrapped in a <disp-formula>/<inline-formula> -
     # confirmed by inspecting the raw XML, since PMC's search API doesn't support finding
     # articles by content like this directly
-    article = fetch_xml('PMC9000000', 'pmc')
+    article = load_xml('PMC9000000')
     return article
 
 
 @pytest.fixture(scope='module')
 def citation_offset_article():
-    article = fetch_xml('PMC8466798', 'pmc')
+    article = load_xml('PMC8466798')
     return article
 
 

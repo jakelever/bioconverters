@@ -15,12 +15,12 @@ from bioconverters import (
     pubmedxml2txt,
 )
 
-from .util import fetch_xml
+from .util import load_xml
 
 
 @pytest.fixture(scope='module')
 def doc():
-    article = fetch_xml('20628391', 'pubmed')  # has a table to be processed in it
+    article = load_xml('pubmed_20628391')  # has a table to be processed in it
     file = StringIO(article)
     return list(pubmedxml2bioc(file))[0]
 
