@@ -33,6 +33,12 @@ class PMCMeta:
     journal_iso: str
     """ISO abbreviation of the journal title, or an empty string if not found."""
 
+    language: str
+    """Language of the article's text, from its `xml:lang` attribute, lowercased and reduced
+    to the primary subtag (e.g. "en" for "EN" or "en-US"). A sub-article without its own
+    `xml:lang` takes its parent article's, and an article without one is "en" (the JATS
+    default)."""
+
 
 @dataclass
 class PMCArticle(PMCMeta):
@@ -66,6 +72,12 @@ class PMCArticle(PMCMeta):
 
     journal_iso: str
     """ISO abbreviation of the journal title, or an empty string if not found."""
+
+    language: str
+    """Language of the article's text, from its `xml:lang` attribute, lowercased and reduced
+    to the primary subtag (e.g. "en" for "EN" or "en-US"). A sub-article without its own
+    `xml:lang` takes its parent article's, and an article without one is "en" (the JATS
+    default)."""
 
     title: str
     """Article title, or an empty string if not found."""

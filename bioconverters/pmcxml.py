@@ -2,7 +2,7 @@ import calendar
 import io
 import re
 import xml.etree.ElementTree as etree
-from typing import Iterable, Iterator, TextIO, Tuple, TypedDict, Union
+from typing import Iterable, Iterator, Optional, TextIO, Tuple, TypedDict, Union
 
 import bioc
 
@@ -14,6 +14,19 @@ _MONTH_NAME_TO_NUMBER = {m: i for i, m in enumerate(calendar.month_name)}
 _MONTH_NAME_TO_NUMBER.update({m: i for i, m in enumerate(calendar.month_abbr)})
 
 _CITATION_TAG = "citation"
+
+# ElementTree expands the reserved xml: prefix to this namespace
+_XML_LANG_ATTRIB = "{http://www.w3.org/XML/1998/namespace}lang"
+
+# JATS defines xml:lang's default as English
+_DEFAULT_LANGUAGE = "en"
+
+
+def _normalize_language(value: Optional[str]) -> Optional[str]:
+    """Lowercase a language tag and reduce it to its primary subtag, e.g. "EN" or "en-US" -> "en"."""
+    if not value or not value.strip():
+        return None
+    return re.split(r"[-_]", value.strip().lower())[0]
 
 
 class _PmcContentFields(TypedDict):
@@ -239,7 +252,7 @@ def _field_text(elem, tag):
     return field.text.strip().replace("\n", " ")
 
 
-def _get_meta_info_for_pmc_article(article_elem) -> PMCMeta:
+def _get_meta_info_for_pmc_article(article_elem, default_language: str = _DEFAULT_LANGUAGE) -> PMCMeta:
     # Attempt to extract the PubMed ID, PubMed Central ID and DOI
     id_map = {}
     article_id = article_elem.findall("./front/article-meta/article-id") + article_elem.findall(
@@ -322,6 +335,8 @@ def _get_meta_info_for_pmc_article(article_elem) -> PMCMeta:
         if field.attrib.get("journal-id-type") == "iso-abbrev":
             journal_iso_text = field.text
 
+    language = _normalize_language(article_elem.attrib.get(_XML_LANG_ATTRIB)) or default_language
+
     return PMCMeta(
         pmcid=pmcid_text,
         pmid=pmid_text,
@@ -331,6 +346,7 @@ def _get_meta_info_for_pmc_article(article_elem) -> PMCMeta:
         pub_day=pub_day,
         journal=journal_text,
         journal_iso=journal_iso_text,
+        language=language,
     )
 
 
@@ -369,6 +385,7 @@ def parse_pmcxml(
     clear_empty_brackets: bool = True,
     fix_exponentials: bool = True,
     strip_tag_attributes: bool = True,
+    language: Optional[str] = _DEFAULT_LANGUAGE,
 ) -> Iterable[PMCArticle]:
     """
     Parse a PMC XML file into a series of PMCArticle objects (one per article/sub-article).
@@ -404,6 +421,13 @@ def parse_pmcxml(
             stripped entirely then. Citation injection's own attributes (pmid/doi/count) are
             always kept regardless of this flag, since they carry meaning that plain markup
             can't express.
+        language: only yield articles/sub-articles whose `xml:lang` matches this language
+            (default "en"), or yield everything if None. Matching is case-insensitive and on
+            the primary subtag, so "en" matches "EN" and "en-US". Each sub-article is checked
+            on its own (e.g. an English translation sub-article of a non-English article is
+            kept), taking its parent's language if it has no `xml:lang` of its own; an article
+            with no `xml:lang` at all counts as English, the JATS default. Each yielded
+            article's language is in its `language` field.
 
     These defaults match pmcxml2bioc/pmcxml2txt, so behavior is consistent regardless of
     which entry point is used.
@@ -412,6 +436,8 @@ def parse_pmcxml(
         "inject_citations and clean_numeric_citations can't both be True - injection enriches bibr "
         "citations, clean_numeric_citations deletes them. Pass clean_numeric_citations=False."
     )
+
+    wanted_language = _normalize_language(language) if language is not None else None
 
     source = _apply_pmc_xlink_fix(source)
 
@@ -435,7 +461,7 @@ def parse_pmcxml(
                     sub_meta = meta
                 else:
                     # Check if this subarticle has any distinguishing IDs and use them instead
-                    sub_meta = _get_meta_info_for_pmc_article(article_elem)
+                    sub_meta = _get_meta_info_for_pmc_article(article_elem, default_language=meta.language)
                     if not (sub_meta.pmid or sub_meta.pmcid or sub_meta.doi):
                         sub_meta.pmid = meta.pmid
                         sub_meta.pmcid = meta.pmcid
@@ -447,6 +473,9 @@ def parse_pmcxml(
                     if not sub_meta.journal:
                         sub_meta.journal = meta.journal
                         sub_meta.journal_iso = meta.journal_iso
+
+                if wanted_language is not None and sub_meta.language != wanted_language:
+                    continue
 
                 content = _extract_article_content(
                     article_elem,
@@ -470,6 +499,7 @@ def parse_pmcxml(
                     pub_day=sub_meta.pub_day,
                     journal=sub_meta.journal,
                     journal_iso=sub_meta.journal_iso,
+                    language=sub_meta.language,
                     **content,
                 )
 
@@ -485,6 +515,7 @@ def pmcxml2bioc(
     clean_xrefs_in_brackets: bool = True,
     clear_empty_brackets: bool = True,
     fix_exponentials: bool = True,
+    language: Optional[str] = _DEFAULT_LANGUAGE,
 ) -> Iterator[bioc.BioCDocument]:
     """
     Convert a PMC XML file into its Bioc equivalent
@@ -499,6 +530,7 @@ def pmcxml2bioc(
         clean_xrefs_in_brackets: see parse_pmcxml.
         clear_empty_brackets: see parse_pmcxml.
         fix_exponentials: see parse_pmcxml.
+        language: see parse_pmcxml. Defaults to "en"; pass None to keep every language.
 
     Raises:
         RuntimeError: On any parsing errors
@@ -517,6 +549,7 @@ def pmcxml2bioc(
             clean_xrefs_in_brackets=clean_xrefs_in_brackets,
             clear_empty_brackets=clear_empty_brackets,
             fix_exponentials=fix_exponentials,
+            language=language,
         ):
             bioc_doc = bioc.BioCDocument()
             bioc_doc.id = pmc_doc.pmid
@@ -529,6 +562,7 @@ def pmcxml2bioc(
             bioc_doc.infons["day"] = pmc_doc.pub_day
             bioc_doc.infons["journal"] = pmc_doc.journal
             bioc_doc.infons["journal_iso"] = pmc_doc.journal_iso
+            bioc_doc.infons["language"] = pmc_doc.language
 
             offset = 0
             for group_name in sections:
@@ -565,6 +599,7 @@ def _pmc_article_meta(doc: PMCArticle) -> PMCMeta:
         pub_day=doc.pub_day,
         journal=doc.journal,
         journal_iso=doc.journal_iso,
+        language=doc.language,
     )
 
 
@@ -577,6 +612,7 @@ def pmcxml2txt(
     clean_xrefs_in_brackets: bool = True,
     clear_empty_brackets: bool = True,
     fix_exponentials: bool = True,
+    language: Optional[str] = _DEFAULT_LANGUAGE,
 ) -> Iterator[Tuple[PMCMeta, str]]:
     """
     Convert a PMC XML file into plain text, one (metadata, text) pair per article/sub-article.
@@ -593,6 +629,7 @@ def pmcxml2txt(
         clean_xrefs_in_brackets: see parse_pmcxml.
         clear_empty_brackets: see parse_pmcxml.
         fix_exponentials: see parse_pmcxml.
+        language: see parse_pmcxml. Defaults to "en"; pass None to keep every language.
 
     Returns:
         An iterator over one (PMCMeta, text) pair per article/sub-article
@@ -606,6 +643,7 @@ def pmcxml2txt(
         clean_xrefs_in_brackets=clean_xrefs_in_brackets,
         clear_empty_brackets=clear_empty_brackets,
         fix_exponentials=fix_exponentials,
+        language=language,
     ):
         text = passage_separator.join(doc.iter_text(sections))
         yield _pmc_article_meta(doc), text
@@ -618,6 +656,7 @@ def pmcxml2tagged(
     keep_tags=PMC_KEEP_TAGS,
     trim_buggy_sentences: bool = True,
     strip_tag_attributes: bool = True,
+    language: Optional[str] = _DEFAULT_LANGUAGE,
 ) -> Iterator[Tuple[PMCMeta, str]]:
     """
     Convert a PMC XML file into marked-up text, one (metadata, text) pair per
@@ -640,6 +679,7 @@ def pmcxml2tagged(
         trim_buggy_sentences: trim overly long, unbroken runs of text to a maximum length,
             to avoid issues with buggy sentences in some PMC articles.
         strip_tag_attributes: see parse_pmcxml.
+        language: see parse_pmcxml. Defaults to "en"; pass None to keep every language.
 
     Returns:
         An iterator over one (PMCMeta, marked-up text) pair per article/sub-article
@@ -655,6 +695,7 @@ def pmcxml2tagged(
         clear_empty_brackets=False,
         fix_exponentials=False,
         strip_tag_attributes=strip_tag_attributes,
+        language=language,
     ):
         text = passage_separator.join(doc.iter_text(sections))
         yield _pmc_article_meta(doc), text

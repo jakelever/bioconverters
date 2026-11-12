@@ -665,3 +665,85 @@ def test_pmcxml2txt_metadata_fields_empty_when_absent_from_source():
     assert meta.doi is None
     assert meta.pub_year is None
     assert text == 'Just some text.'
+
+
+@pytest.fixture(scope='module')
+def chinese_article():
+    article = load_xml('PMC6000002')  # Chinese-language article, xml:lang="zh"
+    return article
+
+
+def test_non_english_article_skipped_by_default(chinese_article):
+    assert list(parse_pmcxml(StringIO(chinese_article))) == []
+
+
+def test_non_english_article_kept_with_language_none(chinese_article):
+    doc, = list(parse_pmcxml(StringIO(chinese_article), language=None))
+    assert doc.pmcid == 'PMC6000002'
+    assert doc.pmid == '25800573'
+    assert doc.language == 'zh'
+
+
+def test_non_english_article_selected_by_its_language(chinese_article):
+    doc, = list(parse_pmcxml(StringIO(chinese_article), language='zh'))
+    assert doc.language == 'zh'
+
+
+def test_english_article_kept_by_default(table_article):
+    doc, = list(parse_pmcxml(StringIO(table_article)))
+    assert doc.language == 'en'
+
+
+@pytest.mark.parametrize('xml_lang', ['en', 'EN', 'en-US', 'en_GB'])
+def test_language_match_ignores_case_and_region(xml_lang):
+    xml = f'<article xml:lang="{xml_lang}"><body><p>Some text.</p></body></article>'
+    doc, = list(parse_pmcxml(StringIO(xml)))
+    assert doc.language == 'en'
+    doc, = list(parse_pmcxml(StringIO(xml), language='EN-us'))
+    assert doc.language == 'en'
+
+
+def test_article_without_xml_lang_counts_as_english():
+    # JATS defines xml:lang's default as English
+    doc, = list(parse_pmcxml(StringIO(_NO_METADATA_XML)))
+    assert doc.language == 'en'
+    assert list(parse_pmcxml(StringIO(_NO_METADATA_XML), language='zh')) == []
+
+
+_TRANSLATED_SUBARTICLE_XML = '''<article xml:lang="zh">
+    <front><article-meta><article-id pub-id-type="pmid">1</article-id></article-meta></front>
+    <body><p>原文。</p></body>
+    <sub-article article-type="translation" xml:lang="en">
+        <body><p>Translated text.</p></body>
+    </sub-article>
+    <sub-article>
+        <body><p>未标注语言的子文章。</p></body>
+    </sub-article>
+</article>'''
+
+
+def test_subarticles_filtered_on_their_own_language():
+    # the English translation sub-article is kept even though its parent is Chinese, and the
+    # sub-article with no xml:lang inherits the parent's "zh"
+    docs = list(parse_pmcxml(StringIO(_TRANSLATED_SUBARTICLE_XML)))
+    assert [(doc.language, list(doc.article)) for doc in docs] == [('en', ['Translated text.'])]
+    assert docs[0].pmid == '1'  # metadata still inherited from the skipped parent
+
+    all_docs = list(parse_pmcxml(StringIO(_TRANSLATED_SUBARTICLE_XML), language=None))
+    assert [doc.language for doc in all_docs] == ['zh', 'en', 'zh']
+
+
+def test_wrappers_pass_language_through(chinese_article):
+    assert list(pmcxml2txt(StringIO(chinese_article))) == []
+    assert list(pmcxml2bioc(StringIO(chinese_article))) == []
+    assert list(pmcxml2tagged(StringIO(chinese_article))) == []
+
+    (meta, _text), = list(pmcxml2txt(StringIO(chinese_article), language=None))
+    assert isinstance(meta, PMCMeta)
+    assert meta.language == 'zh'
+
+    bioc_doc, = list(pmcxml2bioc(StringIO(chinese_article), language=None))
+    assert bioc_doc.infons['language'] == 'zh'
+
+    (meta, _text), = list(pmcxml2tagged(StringIO(chinese_article), language=None))
+    assert meta.language == 'zh'

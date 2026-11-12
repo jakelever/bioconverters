@@ -18,6 +18,7 @@ FIXTURES = [
     ("pmc", "PMC3203921", "PMC3203921"),
     ("pmc", "PMC9000000", "PMC9000000"),
     ("pmc", "PMC8466798", "PMC8466798"),
+    ("pmc", "PMC6000002", "PMC6000002"),  # Chinese-language article (xml:lang="zh")
 ]
 
 EFETCH_URL = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi"

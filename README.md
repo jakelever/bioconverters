@@ -60,7 +60,7 @@ for article in parse_pubmedxml('/path/to/medline.xml'):
 
 ## PubMed Central XML
 
-You can get the full text cleanly from PMC files with the functions below:
+You can get the full text cleanly from PMC files with the functions below. By default, all of them only return English articles - see [Filtering by language](#filtering-by-language-with-language).
 
 ### `pmcxml2txt` [[api]](https://jakelever.github.io/bioconverters/bioconverters.html#pmcxml2txt) - plain text with metadata
 
@@ -68,7 +68,7 @@ You can get the full text cleanly from PMC files with the functions below:
 from bioconverters import pmcxml2txt
 
 for meta, text in pmcxml2txt('/path/to/pmc.xml'):
-    # meta is a PMCMeta dataclass: pmcid, pmid, doi, pub_year/month/day, journal, journal_iso
+    # meta is a PMCMeta dataclass: pmcid, pmid, doi, pub_year/month/day, journal, journal_iso, language
     # text is a single string, e.g. "Title\n\nAbstract...\n\nBody..."
     ...
 ```
@@ -111,7 +111,23 @@ Notable flags:
 - `keep_tags` - which tags' markup is preserved inline when `return_xml=True`. Use `pmc_constants.PMC_KEEP_TAGS` for useful formatting tags (`<sup>`, `<sub>`, `<italic>`, etc).
 - `inject_citations` (default `False`) - resolve each in-text citation's `pmid`/`doi` and retag it to `<citation pmid="...">1</citation>`, kept in the output instead of dropped. Can't be combined with `clean_numeric_citations`.
 - `clean_numeric_citations`, `clean_xrefs_in_brackets`, `clear_empty_brackets` (all default `True`) - see "Cleaning up text" below.
+- `language` (default `"en"`) - only return articles in this language, or every article if `None`. See "Filtering by language" below.
 - `strip_tag_attributes` (default `True`) - with `return_xml=True`, strip source-XML attributes (e.g. the `toggle` in `<italic toggle="yes">`) from every kept tag, since they're clutter with no meaning to callers. Attributes added by `inject_citations` (`pmid`/`doi`/`count`) are always kept regardless of this flag.
+
+### Filtering by language with `language`
+
+PMC includes articles in many languages, marked with an `xml:lang` attribute on each `<article>`/`<sub-article>` (e.g. `xml:lang="zh"`). All the PMC functions take a `language` argument and only return articles in that language. It defaults to `"en"`, so non-English articles are skipped unless you ask for them:
+
+```python
+from bioconverters import parse_pmcxml
+
+for article in parse_pmcxml('/path/to/pmc.xml', language=None):  # every language
+    print(article.pmcid, article.language)  # e.g. "PMC6000002 zh"
+```
+
+- Matching is case-insensitive and on the primary language subtag, so `"en"` matches `xml:lang="EN"` and `xml:lang="en-US"`. The `language` field holds the normalised value (e.g. `"en"`).
+- Each sub-article is checked separately, so an English translation sub-article of a non-English article is still returned. A sub-article without its own `xml:lang` uses its parent's.
+- An article with no `xml:lang` at all counts as English, which is the JATS default.
 
 ## Fetching XML from NCBI with eutils
 
